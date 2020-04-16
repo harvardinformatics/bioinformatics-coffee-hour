@@ -1,0 +1,358 @@
+---
+title: 'FAS Informatics Nanocourse 2019: Differential Expression'
+output:
+  html_document: default
+---
+```{r setup}
+knitr::opts_knit$set(root.dir = "/n/scratchlfs/informatics/nanocourse/rna-seq/DE/my_analysis_dir")
+```
+
+# I. Preliminaries
+The goal of this workshop is to provide an introduction to differential expression analyses using RNA-seq data. While there are now many published methods for tackling specific steps, as well as full-blown pipelines, we will focus on two different approaches that have been show to be top performers with respect to controlling the false discovery rate. The first is using kallisto to estimate expression, in conjuction with sleuth to assess evidence for differential expression. This pipeline is based upon a recently developed approach that doesn't rely on traditional read alignment. The second relies on read mapping with bowtie2, implemented by the gold standard expression estimation tool RSEM, followed by differential expression analysis with limma voom. 
+
+For this component of today's workshop on RNA-seq expression analysis, the expression estimates fed into sleuth and limma voom were created with an annotated genome. The process involved in performing such analyses using a de novo transcriptome assembly is quite similar, with the caveat that there can be biases in expression estimates derived from these methods, and the pipeline for filtering, annotating, and clustering such assemblies into gene level annotations has a substantial impact on the robustness of expression estimates.  
+
+A broader goal of this workshop is to demonstrate how to analyze complex designs that are not the standard one treatment, two condition analyses that are prevalent in the literature. 
+
+## Sample data
+Our sample data comprises 12 paired-end RNA-seq libraries for whole body samples of *Drosophila melanogaster* from two geographic regions (Panama and Maine), with two temperature treatments ("low" ane "high") for each region, featuring three biological replicates for each region x treatment combination. Previously, these data were used to look for parallel gene expression patterns between high and low latitude populations (Zhao et al, 2015, *PLoS Genetics*)
+
+## Loading required R libraries
+First, load all the R libraries that will be used for today's analyses:
+```{r, echo=TRUE}
+library(limma)
+library(sleuth)
+library(edgeR)
+library("biomaRt")
+library(dplyr)
+library(statmod)
+```
+#II. Implementing the kallisto/sleuth pipeline
+Kallisto is an extremely fast tool that uses pseudo-alignments to determine the transcript from which a read originated. Sleuth is the differential expression tool that can accept directly the outputs of kallisto. Both tools came out of Lior Pachter's lab at CalTech. While kallisto is "fast", it is not fast enough to make it efficient to run it to completion for our workshop. Thus, you should have copied the kallisto directory that I pointed you to to a directory you have created on your notebook called kallisto_sleuth.
+
+1. Create an analysis directory in your workspace, and then, once you've created a symlink for the expression data directory into that directory, set your working directory with setwd():  
+```{r,echo=TRUE}
+setwd("/n/scratchlfs/informatics/nanocourse/rna-seq/DE/my_analysis_dir")
+```
+
+### File and data management
+2. Grab sample ids, i.e. names of kallisto run folders for each of the 12 samples:
+```{r, echo=TRUE}
+sample_id <- dir(file.path("expression_data/kallisto"))
+```
+3. Get the directories where the kallisto runs live:
+```{r, echo=TRUE}
+kal_dirs <- file.path("expression_data/kallisto", sample_id)
+```
+4. Make sure that the table that associates sample IDs and treatments (dme_elev_samples.tab) is in your kallisto_sleuth directory, then load that table:
+```{r, echo=TRUE}
+s2c<-read.table("expression_data/dme_elev_samples.tab",header = TRUE, stringsAsFactors=FALSE)
+```
+
+5. Add file paths to s2c table:
+```{r, echo=TRUE}
+s2c <- mutate(s2c, path = kal_dirs)
+```
+
+## Create the sleuth object
+6. Run sleuth_prep. This will take a few minutes ...
+```{r, echo=TRUE}
+so <- sleuth_prep(s2c, extra_bootstrap_summary = TRUE,read_bootstrap_tpm=TRUE,transformation_function = function(x) log2(x + 0.5))
+```
+We do boostrap_summary = TRUE so we can do plots of bootstrap replicates to see how robust our differential expression calls are, and set read_bootstrap_tpm=TRUE to allow for later visualizatons in TPM units to be available.We specify a transformation function such that transformed abundance estimates are in log2 scale. While we use likelihood ratio tests in this workflow (see below), If one were to to Wald tests, or to do logfold change calculations on the transformed data in the sleuth object, the log2 scale is more interpretable with respect to logfold change. By default, sleuth does a natural log transformation.  
+
+7. At this point, you can do some quick and dirty, hard-coded visualzations of the expression data to make sure nothing looks wonky, although I'll show you shortly how to do something fancier by launching a local Shiny server to interactively query your data. You can do a PCA of your samples, and look at count densities by treatment, which ideally should not vary by treatment!
+```{r}
+plot_pca(so, color_by = 'temp')
+plot_group_density(so, use_filtered = TRUE, units = "est_counts",trans = "log", grouping = "temp", offset = 1)  
+```
+
+## A vanilla two-treatment DE analysis (ignoring the effects of population)
+8. We first fit a full model that includes a paramter for the condition (in this case temp)
+```{r, echo=TRUE}
+so <- sleuth_fit(so, ~temp, 'full')
+```
+9. Next, we fit a reduced model that only includes the intercept
+```{r,echo=TRUE}
+so <- sleuth_fit(so, ~1, 'reduced')
+```
+10. For each transcript, we perform a likelihood ratio test to determine whether the full model that includes a parameter for temperature fits the data significantly better than the reduced model. Significantly better fit is indicative of differential expression.
+```{r,echo=TRUE}
+so <- sleuth_lrt(so, 'reduced', 'full')
+```
+11. You can look in more detail at the models by doing:
+```{r,echo=TRUE}
+models(so)
+```
+12. Make a table of the results via:
+```{r,echo=TRUE}
+sleuth_table <- sleuth_results(so, 'reduced:full', 'lrt', show_all = FALSE)
+```
+
+13. And make a table that only includes the significantly DE transcripts
+```{r,echo=TRUE}
+sleuth_significant <- dplyr::filter(sleuth_table, qval <= 0.05)
+head(sleuth_significant)
+```
+**Table columns**  
+**target_id:** transcript name  
+**pval:** p-value of the likelihood ratio test  
+**qval:** false discovery rate adjusted p-value, using Benjamini-Hochberg  
+**test_stat:** Chi-square test statistic of LRT  
+**rss:** residual sum of squares under the null model  
+**degrees_free:** degrees freedom for the LRT  
+**mean_obs** mean of natural log counts of observations  
+**var_obs:** variance of observations  
+**tech_var:** technical variance of observations obtained from bootstraps  
+**sigma_sq:** raw estimator of variance once technical variance has been removed  
+**smooth_sigma_sq:** smooth regression fit for shrinkage estimation  
+**final_sigma_sq:** max(sigma_sq, smooth_sigma_sq)<br />
+If one does dim(sleuth_table) and dim(sleuth_significant), you will see that 2237/28095 transcripts (7.96%) are significantly DE.From here, you could write the table to a file using write.table or write.csv. E.g.
+```{r,echo=TRUE}
+write.csv(sleuth_table,"sleuth_vanilla.csv",row.names=FALSE,quote=FALSE)
+```
+You can also generate plots, based upon the bootstraps, to examine the variation among samples.  
+14. Plot variation in units of estimated counts
+```{r,echo=TRUE}
+plot_bootstrap(so, "FBtr0304667", units = "est_counts", color_by = "temp")  
+```
+
+15. Plot variation in transcripts per million (TPM)
+```{r,echo=TRUE}
+plot_bootstrap(so, "FBtr0304667", units = "tpm", color_by = "temp")
+```
+
+**Note:** if one had not specified boostraps in tpm units in the sleuth_prep command, running this command would generate an error.
+
+## Visualizng an experiment with Shiny
+Rather than generate plot after plot with code, one can create a Shiny webpage. Shiny is an R package that allows for easy construction of interactive web applications. Sleuth has shiny functionality built into it, such that explore expression variation among samples, qc plots, and other features.
+16. Launch a shiny page for your experiment
+```{r,echo=TRUE,eval=FALSE}
+sleuth_live(so)
+```
+## Extracting information on up/down regulation
+Many packages, including limma, use Wald tests for two-sample comparisons. The LRT approach is a bit more elegant in that it is formally testing the relative goodness of fit of a more parameterized (i.e. including an effect of treatment) vs. a less parameterized model, instead of the null hypothesis of no difference in expression between conditions. Thus, in LRT mode, the results table output does not include a logfold change estimate. But, with a little bit of data manipulation, we can extract mean TPM values per treatment and add them to our sleuth results table so that, for transcripts with significant differential expression, we can asses the direction of the difference.
+
+17. Extract TPM means by treatment and append to table
+```{r,echo=TRUE}
+temphigh<-s2c$sample[s2c$temp=="high"]
+templow<-s2c$sample[s2c$temp=="low"]
+hiraw<-subset(so$obs_raw,so$obs_raw$sample %in% temphigh)
+lowraw<-subset(so$obs_raw,so$obs_raw$sample %in% templow)
+highmeans<-aggregate(tpm~target_id,data=hiraw,FUN=function(x) c(mean=mean(x)))
+colnames(highmeans)<-c("target_id","tpm_high")
+lowmeans<-aggregate(tpm~target_id,data=lowraw,FUN=function(x) c(mean=mean(x)))
+colnames(lowmeans)<-c("target_id","tpm_low")
+merged_means<-merge(lowmeans,highmeans,by=c("target_id"))
+sleuth_table_wTPM<-left_join(sleuth_table,merged_means)
+head(sleuth_table_wTPM)
+```
+
+It's then a very simple matter to filter on significant transcripts and ratio of treatment means to get information on which transcripts are upregulated or downregulated for a treatment.
+
+## A not so vanilla 2-factor experiment: effects of population and temperature
+In most experiments with multiple factors, we want to understand their main effects, and to a lesser extent their interactions. The nature of contrasts are different between the vanilla experiment above, where the difference between high and low is done agnostic to population of origin, and a 2-factor additive model where the contrasts for each factor don't get confused with each other. 
+18. Rebuild the sleuth object
+```{r,echo=TRUE}
+so <- sleuth_prep(s2c, extra_bootstrap_summary = TRUE,read_bootstrap_tpm=TRUE,transformation_function = function(x) log2(x + 0.5))
+```
+19. Fit the full model with temperature and population effects
+```{r,echo=TRUE}
+so <- sleuth_fit(so, ~temp + population, 'full')
+```
+20. Fit a reduced model that includes population
+```{r,echo=TRUE}
+so <- sleuth_fit(so, ~population, 'population')
+```
+21. Run the likelihood ratio test
+```{r,echo=TRUE}
+so <- sleuth_lrt(so, 'population', 'full')
+```
+22. Create a table of results
+```{r,echo=TRUE}
+sleuth_table <- sleuth_results(so, 'population:full', 'lrt', show_all = FALSE)
+```
+23. Create a table of significant results
+```{r,echo=TRUE}
+sleuth_significant_table <- dplyr::filter(sleuth_table, qval <= 0.05)
+```
+Note that by controlling for population, we are able to call more transcripts as differentially expresed, 3270/28095 = 11.6 % diff expressed compared to 7.96% without controlling for population.  
+
+The above analysis could also be done for a full model that includes an interaction term, by specifying temp*population rather than temp+population. It is worth noting that this can be a valuable approach, as a significant interaction term for a transcript or gene complicates the interpretation of a main effect for temperature...
+
+## Doing gene-level analyses with sleuth
+We'll use the R biomaRt package to grab ensembl gene names so that expression can be aggregate across transcripts by gene.
+
+24. See which "marts" are available
+```{r,echo=TRUE}
+listMarts()
+```
+25. Pick the relevant mart
+```{r,echo=TRUE}
+ensembl=useMart("ENSEMBL_MART_ENSEMBL")
+```
+26. In our case, we want fly genes: dmelanogaster_gene_ensembl
+```{r,echo=TRUE}
+mart <- biomaRt::useMart(biomart = "ENSEMBL_MART_ENSEMBL",
+  dataset = "dmelanogaster_gene_ensembl",
+  host = 'ensembl.org')
+```
+27. Create a transcripts to gene table object and table columns appropriately
+```{r,echo=TRUE}
+t2g <- biomaRt::getBM(attributes = c("ensembl_transcript_id", "ensembl_gene_id",
+    "external_gene_name"), mart = mart) 
+t2g <- dplyr::rename(t2g, target_id = ensembl_transcript_id,
+  ens_gene = ensembl_gene_id, ext_gene = external_gene_name) 
+```
+28. Rebuild sleuth object, aggregating by gene name:
+```{r,echo=TRUE}
+so <- sleuth_prep(s2c, target_mapping = t2g,aggregation_column = 'ens_gene',transformation_function = function(x) log2(x + 0.5))
+```
+29. Re-fit full model:
+```{r,echo=TRUE}
+so <- sleuth_fit(so, ~temp + population, 'full')
+```
+30. Re-fit reduced model:
+```{r,echo=TRUE}
+so <- sleuth_fit(so, ~population, 'population')
+```
+31. Re-run LRT test
+```{r,echo=TRUE}
+so <- sleuth_lrt(so, 'population', 'full')
+```
+32. Make a results table
+```{r,echo=TRUE}
+sleuth_table_genes_level <- sleuth_results(so, 'population:full', 'lrt', show_all = FALSE)
+```
+
+and look at the results:
+```{r,echo=TRUE}
+head(sleuth_table_genes_level)
+```
+# Implementing the RSEM/Limma pipeline
+Before one starts a limma voom analysis, one needs to run RSEM on adapter-stripped fastq files, either on RSEM-compatible bam files, or by having RSEM use STAR or bowtie2 to do the alignments with RSEM-specific settings. For studies where a reference genome is available, we do not recommend any quality trimming as there is evidence emerging that quality trimming can bias expression estimates. I have already run RSEM with bowtie2 on all of the samples. One can then use one of RSEM's utility function's to create the expression matrix, consisting of rows for each observation (transcript or gene), and columns for samples. Assuming one has supplied a gene-to-transcript map when the RSEM index is built, RSEM will output gene-level and transcript (isoform) -level expression estimates.
+
+## Data management
+Note that we can use the same s2c table to relate conditions to sample IDs. We can then load the expression marrix table. For this exercise, we will conduct analyses at the gene level.
+
+1. Open RSEM matrix
+```{r,echo=TRUE}
+rsem_gene_data<-read.table("expression_data/dme_elevgrad_rsem_bt2_gene_counts.matrix",header=TRUE,row.names=1)
+```
+## Pre-processing and filtering
+RSEM usem a generative model of RNA-seq and Expectation-Maximization to generate "expected counts" in a way that also uses multi-mapping reads, and their associated mapping uncertainty with, e.g. if reads map to exons shared between transcripts of a gene. As a result, values will be non-integer but almost all DE tools work with counts. Thus, our first step is to round the marrix.
+
+2. Round the expression matrix
+```{r,echo=TRUE}
+rnaseqMatrix=round(rsem_gene_data)
+```
+A number of transcripts will be not expressed at all in any sample, or may only be expressed in a small number of samples. In the latter case, testing for differential expression is noisy and under-powered. A common approach is to require that at least one condition shows evidence for expression. It should be noted that optimal choice of filtering threshold remains a work in progress. For the purpose of this workshop, we will set a threshold for a minimum level of expression for the number of samples equivalent to the condition with the smallest number of samples. In our case, if we are compoaring high vs. low temperature, the number of samples will be 6. Limma fits linear models to counts per million (CPM). So, we can filter our matrix using the cpm (i.e. counts per million) function from edgeR.  **Requiring cpm of 1 for so many samples may be too stringent in experiments with many replicates.** It is worth considering carefully one's filtering strategy.
+
+3. Create a boolean variable that classifies samples according to whether CPM>=1:
+```{r,echo=TRUE}
+filter=rowSums(cpm(rnaseqMatrix)>=1)>=6
+```
+4. Apply the filter to the expression matrix:
+```{r,echo=TRUE}
+cpm_filtered_matrix=rnaseqMatrix[filter,]
+```
+This operation filters out ~5000 genes, which reduces our multiple testing burden as well (although limma might not atually try and conduct tests on a subset of these).
+
+```{r,echo=TRUE}
+100*(1-dim(cpm_filtered_matrix)[1]/dim(rnaseqMatrix)[1])
+```
+Thus, 26.9% of genes were filterd out prior to DE analysis.
+
+## Creating a Digital Gene Expression list object 
+To run limma, we need to transform the expression matrix into a DGElist ("digital gene expression list") which is an object class that comes from edgeR
+
+5. Create the DGE object and normalized expression matrix:
+```{r,echo=TRUE}
+DGE<-DGEList(cpm_filtered_matrix)
+```
+The next step is conducting normalization of the counts across samples so that library size differences and the effects of genes that are highly expressed and sample specific are accounted for. Regarding the latter, we want to avoid having a few genes take up excession sequencing "real estate" given the overall number of reads generated by a sample, such that it reduces the reads in other transcripts in a way that would lead to false positive DE. To do this, we use the trimmed mean of M-values (TMM)  of Robinson and Oshlack (2010) available in edgeR. Note, one can use other normalization schemes, and I have seen some evidence that conditional quantile normalizartion (CQN) mignt be worth considering as an alternative.
+
+6. Calculate normalization factors and do MDS plot:
+```{r,echo=TRUE}
+DGE<-calcNormFactors(DGE,method =c("TMM"))
+```
+
+Then, do a quick MDS plot to see if there are any outliers
+```{r,echo=TRUE}
+tempvals<-s2c$temp
+plotMDS(DGE,top=500,col=ifelse(tempvals=="low","blue","red"),gene.selection="common")
+```
+
+**Note:** there are a number of other tools out there for doing clustering visualization, including PCA, WGCNA, etc. Check out the DESeq2 documentation for doing PCA on an arbitrary expression matrix.
+
+## The vanilla one factor, two treatment DE analysis
+A fundamental step of DE analysis is to construct a design matrix that will be used to fit the linear model. In our simple vanilla 2-condition, example we can simply use the temp variable in the s2c table to create a matrix. which represents binary 0/1 encodings of the temp conditions.
+
+7. Create design matrix:
+```{r,echo=TRUE}
+design_temp=model.matrix(~temp, data=s2c)
+design_temp
+```
+After creating the design matrix object, the standard approach is to next run limma voom on the DGE object, e.g.:
+```{r,echo=TRUE,eval=FALSE}
+v <- voom(DGE, design=design_temp, plot=TRUE)
+```
+**However** ... while this works fine under an ideal scenario, it becomes a problem if there is variation in sample quality, or more generally, there is some indication that a subset of samples appear as outliers via MDS, PCA, etc. Particularly for RNA-seq experiments where researchers may only have a few repicates per sample, discarding outlier samples is not feasible because it may lead to few if any biological replciates for some subset of treatments. 
+
+A better solution to this problem is to apply weights to samples such that outlier samples are downweighted during differential expression calcuations. Limma voom does this by calculating "empirical quality weights" for each sample. 
+
+8. Run limma voom with sample quality weights:
+```{r,echo=TRUE}
+vwts <- voomWithQualityWeights(DGE, design=design_temp,normalization="none", plot=TRUE)
+```
+
+**Note:** we have already applied TMM normalization, thus can set the normalization argument to none. This above command will also generate a plot with two panels showing the mean-variance relationship fit on the left, and a barplot of weights assigned to individual samples.
+
+9. Then, run the linear model fitting procedure 1st step:
+```{r,echo=TRUE}
+fit=lmFit(vwts,design_temp)
+```
+10. Then apply the empirical bayes procedure:
+```{r,echo=TRUE}
+fit=eBayes(fit,robust=TRUE)
+```
+We use the robust=TRUE setting to leverage the quality weights such that the analysis is robust to outliers.
+
+One can then get a quick and dirty summary of how many genes are differentially expressed, setting the FDR threshold,where the "fdr" and "BH" methods are synonymous for Benjamini Hochberg adjusted p-values.
+
+11. Get summary table:
+```{r,echo=TRUE}
+summary(decideTests(fit,adjust.method="fdr",p.value = 0.05))
+```
+One piece of important info is the factor relative to which logfold change is being calculated, i.e. low will be the numerator for logfold change calculations.
+
+12. Explore the data by extracting the top 10 DE genes (sorted by p-value):
+```{r,echo=TRUE}
+topTable(fit, adjust="BH",resort.by="P")
+```
+The full table will be useful for many purposes, such as creating custom MA or volcano plots with color-coding and symbols to meet your needs.
+13. Create a table of all genes (significant and not)
+```{r,echo=TRUE}
+all_genes<-topTable(fit, adjust="BH",coef="templow", p.value=1, number=Inf ,resort.by="P")
+```
+coeff = the coefficient or contrast you want to extract  
+number = the max number of genes to list  
+adjust = the P value adjustment method  
+resort.by determines what criteria with which to sort the table  
+
+## Extending to more complicated designs
+Extending limma to analyze more complex designs, such as the 2-factor design performed above with sleuth, is relatively straightforward. A key part is to specify the design matrix properly. For the 2-factor design, one would do this as follows:
+```{r,echo=TRUE}
+population <- factor(s2c$population)
+temperature <- factor(s2c$temp, levels=c("low","high"))
+design_2factor<- model.matrix(~population+temperature)
+design_2factor
+```
+Then, you would proceed with DE analysis in a similar fashion as with the single factor experiment described above.
+
+## Final thoughts on limma voom
+One of limma's big advantages is that, for complex experiments, one is able to specify arbitrary contrasts to extract and test, leveraging the full spectrum of options for linear modeling. However, doing so **properly** requires a thorough understanding of linear modeling. 
+
+
+    
+
