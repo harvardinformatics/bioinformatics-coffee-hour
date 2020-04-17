@@ -22,6 +22,7 @@ Our sample data comprises 12 paired-end RNA-seq libraries for whole body samples
 First, load all the R libraries that will be used for today's analyses:
 ```{r, echo=TRUE}
 library(edgeR)
+library(limma)
 ```
 
 ## Data management
