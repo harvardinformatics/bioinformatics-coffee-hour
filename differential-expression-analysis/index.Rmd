@@ -5,11 +5,15 @@ output:
 ---
 
 # I. Preliminaries
-The goal of this workshop is to provide an introduction to differential expression analyses using RNA-seq data. While there are now many published methods for tackling specific steps, as well as full-blown pipelines, we will focus on two different approaches that have been show to be top performers with respect to controlling the false discovery rate. The first is using kallisto to estimate expression, in conjuction with sleuth to assess evidence for differential expression. This pipeline is based upon a recently developed approach that doesn't rely on traditional read alignment. The second relies on read mapping with bowtie2, implemented by the gold standard expression estimation tool RSEM, followed by differential expression analysis with limma voom. 
+This tutorial consists of a workflow demostration for differential expression analyses using RNA-seq data using limma voom. While there are now many published methods for tackling specific steps, as well as full-blown pipelines, limma voom has  been show to be one of the top performers with respect to controlling the false discovery rate. In our daylong differential expression workshop, we also cover DE testing with sleuth, another top performer with respect to FDR control, and which is designed explicitly to handle psueduo-alignment based estimates of abundance derived from kallisto. Our limma voom workflow will use a gene-level count matrix derived from estimates of RNA abundance in each samples. These estimates have been generated with RSEM, using bowtie2 read alignments. Our limma voom workflow will use a gene-level count matrix derived from estimates of RNA abundance in each samples. These estimates have been generated with RSEM, using bowtie2 read alignments. These alignments were to transcripts derived from an annotated reference genome.
 
-For this component of today's workshop on RNA-seq expression analysis, the expression estimates fed into sleuth and limma voom were created with an annotated genome. The process involved in performing such analyses using a de novo transcriptome assembly is quite similar, with the caveat that there can be biases in expression estimates derived from these methods, and the pipeline for filtering, annotating, and clustering such assemblies into gene level annotations has a substantial impact on the robustness of expression estimates.  
+Specific topics covered today include:
 
-A broader goal of this workshop is to demonstrate how to analyze complex designs that are not the standard one treatment, two condition analyses that are prevalent in the literature. 
+* Importing and pre-processing a count matrix
+* Using a sample table to define factors used in DE analysis
+* Analysis of single-factor designs
+* Analysis of 2-factor designs
+
 
 ## Sample data
 Our sample data comprises 12 paired-end RNA-seq libraries for whole body samples of *Drosophila melanogaster* from two geographic regions (Panama and Maine), with two temperature treatments ("low" ane "high") for each region, featuring three biological replicates for each region x treatment combination. Previously, these data were used to look for parallel gene expression patterns between high and low latitude populations (Zhao et al, 2015, *PLoS Genetics*)
@@ -18,73 +22,62 @@ Our sample data comprises 12 paired-end RNA-seq libraries for whole body samples
 First, load all the R libraries that will be used for today's analyses:
 ```{r, echo=TRUE}
 library(edgeR)
+library(limma)
 ```
-
-4. Make sure that the table that associates sample IDs and treatments (dme_elev_samples.tab) is in your kallisto_sleuth directory, then load that table:
-```{r, echo=TRUE}
-s2c<-read.table("data/dme_elev_samples.tab",header = TRUE, stringsAsFactors=FALSE)
-```
-
-# Implementing the RSEM/Limma pipeline
-Before one starts a limma voom analysis, one needs to run RSEM on adapter-stripped fastq files, either on RSEM-compatible bam files, or by having RSEM use STAR or bowtie2 to do the alignments with RSEM-specific settings. For studies where a reference genome is available, we do not recommend any quality trimming as there is evidence emerging that quality trimming can bias expression estimates. I have already run RSEM with bowtie2 on all of the samples. One can then use one of RSEM's utility function's to create the expression matrix, consisting of rows for each observation (transcript or gene), and columns for samples. Assuming one has supplied a gene-to-transcript map when the RSEM index is built, RSEM will output gene-level and transcript (isoform) -level expression estimates.
 
 ## Data management
-Note that we can use the same s2c table to relate conditions to sample IDs. We can then load the expression marrix table. For this exercise, we will conduct analyses at the gene level.
+1. Load and view the table that associates sample IDs and treatments (dme_elev_samples.tab):
+```{r, echo=TRUE}
+s2c<-read.table("data/dme_elev_samples.tab",header = TRUE, stringsAsFactors=FALSE)
+s2c
+```
 
-1. Open RSEM matrix
+2. Open RSEM matrix
 ```{r,echo=TRUE}
 rsem_gene_data<-read.table("data/dme_elevgrad_rsem_bt2_gene_counts.matrix.bz2",header=TRUE,row.names=1)
 ```
 ## Pre-processing and filtering
-RSEM usem a generative model of RNA-seq and Expectation-Maximization to generate "expected counts" in a way that also uses multi-mapping reads, and their associated mapping uncertainty with, e.g. if reads map to exons shared between transcripts of a gene. As a result, values will be non-integer but almost all DE tools work with counts. Thus, our first step is to round the marrix.
-
-2. Round the expression matrix
+### Handling non-integer RSEM estimates
+3. Round the expression matrix
 ```{r,echo=TRUE}
 rnaseqMatrix=round(rsem_gene_data)
 ```
-A number of transcripts will be not expressed at all in any sample, or may only be expressed in a small number of samples. In the latter case, testing for differential expression is noisy and under-powered. A common approach is to require that at least one condition shows evidence for expression. It should be noted that optimal choice of filtering threshold remains a work in progress. For the purpose of this workshop, we will set a threshold for a minimum level of expression for the number of samples equivalent to the condition with the smallest number of samples. In our case, if we are compoaring high vs. low temperature, the number of samples will be 6. Limma fits linear models to counts per million (CPM). So, we can filter our matrix using the cpm (i.e. counts per million) function from edgeR.  **Requiring cpm of 1 for so many samples may be too stringent in experiments with many replicates.** It is worth considering carefully one's filtering strategy.
-
-3. Create a boolean variable that classifies samples according to whether CPM>=1:
+### Filtering out lowly expressed genes
+4. Create a boolean variable that classifies samples according to whether CPM>=1:
 ```{r,echo=TRUE}
 filter=rowSums(cpm(rnaseqMatrix)>=1)>=6
 ```
-4. Apply the filter to the expression matrix:
+5. Apply the filter to the expression matrix:
 ```{r,echo=TRUE}
 cpm_filtered_matrix=rnaseqMatrix[filter,]
 ```
 This operation filters out ~5000 genes, which reduces our multiple testing burden as well (although limma might not atually try and conduct tests on a subset of these).
 
-```{r,echo=TRUE}
-100*(1-dim(cpm_filtered_matrix)[1]/dim(rnaseqMatrix)[1])
-```
-Thus, 26.9% of genes were filterd out prior to DE analysis.
-
 ## Creating a Digital Gene Expression list object 
 To run limma, we need to transform the expression matrix into a DGElist ("digital gene expression list") which is an object class that comes from edgeR
 
-5. Create the DGE object and normalized expression matrix:
+6. Create the DGE object and normalized expression matrix:
 ```{r,echo=TRUE}
 DGE<-DGEList(cpm_filtered_matrix)
 ```
-The next step is conducting normalization of the counts across samples so that library size differences and the effects of genes that are highly expressed and sample specific are accounted for. Regarding the latter, we want to avoid having a few genes take up excession sequencing "real estate" given the overall number of reads generated by a sample, such that it reduces the reads in other transcripts in a way that would lead to false positive DE. To do this, we use the trimmed mean of M-values (TMM)  of Robinson and Oshlack (2010) available in edgeR. Note, one can use other normalization schemes, and I have seen some evidence that conditional quantile normalizartion (CQN) mignt be worth considering as an alternative.
+## Normalization using TMM method
 
-6. Calculate normalization factors and do MDS plot:
+7. Calculate normalization factors and do MDS plot:
 ```{r,echo=TRUE}
 DGE<-calcNormFactors(DGE,method =c("TMM"))
 ```
+## Quick and dirty outlier check
 
-Then, do a quick MDS plot to see if there are any outliers
+8. Generate an MDS plot
 ```{r,echo=TRUE}
 tempvals<-s2c$temp
 plotMDS(DGE,top=500,col=ifelse(tempvals=="low","blue","red"),gene.selection="common")
 ```
 
-**Note:** there are a number of other tools out there for doing clustering visualization, including PCA, WGCNA, etc. Check out the DESeq2 documentation for doing PCA on an arbitrary expression matrix.
-
 ## The vanilla one factor, two treatment DE analysis
 A fundamental step of DE analysis is to construct a design matrix that will be used to fit the linear model. In our simple vanilla 2-condition, example we can simply use the temp variable in the s2c table to create a matrix. which represents binary 0/1 encodings of the temp conditions.
 
-7. Create design matrix:
+9. Create design matrix:
 ```{r,echo=TRUE}
 design_temp=model.matrix(~temp, data=s2c)
 design_temp
@@ -97,18 +90,18 @@ v <- voom(DGE, design=design_temp, plot=TRUE)
 
 A better solution to this problem is to apply weights to samples such that outlier samples are downweighted during differential expression calcuations. Limma voom does this by calculating "empirical quality weights" for each sample. 
 
-8. Run limma voom with sample quality weights:
+10. Run limma voom with sample quality weights:
 ```{r,echo=TRUE}
 vwts <- voomWithQualityWeights(DGE, design=design_temp,normalize.method="none", plot=TRUE)
 ```
 
 **Note:** we have already applied TMM normalization, thus can set the normalization argument to none. This above command will also generate a plot with two panels showing the mean-variance relationship fit on the left, and a barplot of weights assigned to individual samples.
 
-9. Then, run the linear model fitting procedure 1st step:
+11. Then, run the linear model fitting procedure 1st step:
 ```{r,echo=TRUE}
 fit=lmFit(vwts,design_temp)
 ```
-10. Then apply the empirical bayes procedure:
+12. Then apply the empirical bayes procedure:
 ```{r,echo=TRUE}
 fit=eBayes(fit,robust=TRUE)
 ```
@@ -116,18 +109,18 @@ We use the robust=TRUE setting to leverage the quality weights such that the ana
 
 One can then get a quick and dirty summary of how many genes are differentially expressed, setting the FDR threshold,where the "fdr" and "BH" methods are synonymous for Benjamini Hochberg adjusted p-values.
 
-11. Get summary table:
+13. Get summary table:
 ```{r,echo=TRUE}
 summary(decideTests(fit,adjust.method="fdr",p.value = 0.05))
 ```
 One piece of important info is the factor relative to which logfold change is being calculated, i.e. low will be the numerator for logfold change calculations.
 
-12. Explore the data by extracting the top 10 DE genes (sorted by p-value):
+14. Explore the data by extracting the top 10 DE genes (sorted by p-value):
 ```{r,echo=TRUE}
 topTable(fit, adjust="BH",resort.by="P")
 ```
 The full table will be useful for many purposes, such as creating custom MA or volcano plots with color-coding and symbols to meet your needs.
-13. Create a table of all genes (significant and not)
+15. Create a table of all genes (significant and not)
 ```{r,echo=TRUE}
 all_genes<-topTable(fit, adjust="BH",coef="templow", p.value=1, number=Inf ,resort.by="P")
 ```
@@ -136,8 +129,9 @@ number = the max number of genes to list
 adjust = the P value adjustment method  
 resort.by determines what criteria with which to sort the table  
 
-## Extending to more complicated designs
-Extending limma to analyze more complex designs, such as the 2-factor design performed above with sleuth, is relatively straightforward. A key part is to specify the design matrix properly. For the 2-factor design, one would do this as follows:
+## Analysis of a 2-factor design
+Extending limma to analyze more complex designs is relatively straightforward. A key part is to specify the design matrix properly. For the 2-factor design, one would do this as follows:
+16. Construct the design matrix to incorporate temperate and population effects
 ```{r,echo=TRUE}
 population <- factor(s2c$population)
 temperature <- factor(s2c$temp, levels=c("low","high"))
@@ -145,10 +139,6 @@ design_2factor<- model.matrix(~population+temperature)
 design_2factor
 ```
 Then, you would proceed with DE analysis in a similar fashion as with the single factor experiment described above.
-
-## Final thoughts on limma voom
-One of limma's big advantages is that, for complex experiments, one is able to specify arbitrary contrasts to extract and test, leveraging the full spectrum of options for linear modeling. However, doing so **properly** requires a thorough understanding of linear modeling. 
-
 
     
 
