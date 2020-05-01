@@ -1,0 +1,426 @@
+---
+title: "intermediate_R_part_1.Rmd"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Intermediate R Part 1
+
+The goal of this workshop is to build on R fundamentals we began in the Introduction to R class. In that class we learned how to read and write files and what objects are. This workshop will introduce data manipulation with the tidyverse, including: tidy data (long vs. wide form objects), how to transform data objects using dplyr commands, object filtering, summarizing and aggregating data. 
+
+##R packages and the tidyverse
+
+Data frames are a very useful type of base R object. Base R means that it is a native R object type (similar to vectors and matrices). We learned about several of the R object types this morning, and used some functions that come built in to R. However, as you are probably aware, one of the reasons R is so useful and powerful is because many people have built extensions for R in the form of R packages that you can install. These packages can range from broad statistical packages to packages to analyze specific data types (e.g. comparative phylogenetics). One set of packages that are incredibly useful for working with data is the [tidyverse](https://www.tidyverse.org). We will primarily be using various elements of the tidyverse from here on out, so let's install it.
+
+The way to install new packages you have never used before in R is with the command `install.packages()`, as we demonstrate below:
+
+```{r}
+#install.packages("tidyverse")
+```
+
+Before going further, we need to set up our working environment. As in the Introduction to R course, we will set our working directory and load the **tidyverse** package we just installed. We will also source the **prep_data.R** script in order to load some datasets for us to work with.
+
+Note that you only need to load an R package once per session, but you do need to re-load every time you restart R. It is good practice to load all packages at the top of your R script.
+
+I will also point out that the [tidyverse style guide](http://style.tidyverse.org) offers some good advice on coding style to help make your code easier to read and write. I highly recommend taking a look and implementing many of these design suggestions.
+
+```{r}
+setwd("~/Dropbox/Workshops/August_2019_Bioinformatics_Shortcourse_Workshops/intro_to_R/")
+library(tidyverse)
+source("prep_data.R")
+```
+
+###Tibbles
+
+In the introduction to R course, we were working with data frames. The tidyverse uses its own version of the data frame which is similar, but has several properties that make it superior. That object type is the **tibble**. Let's change a data frame called `df1`, which we will construct, into a tibble and see what it looks like.
+
+```{r}
+df1<-data.frame(label=c("rep1", "rep2", "rep3", "rep4"), data=c(23, 34, 15, 19))
+
+tbdf1 <- as_tibble(df1)
+tbdf1
+```
+
+You see here that just printing the tibble to screen displays the data types in each of the columns and the dimensions. Although not apparent with this small dataset, another very handy feature of tibbles is that by default they will only print out the first 10 rows and as many columns as fit in your window. If you have ever worked with large datasets with hundreds or thousands of rows and many columns and have accidently printed to screen, you know how useful this is! Many packages will accept tibbles instead of data frames with no problems, but if you come across an older package that requires a data frame, it is easy to revert with the `as.data.frame()` function.
+
+
+###Tidy Data
+
+Tidy data is the idea that each row in your data frame should be an observation, and each column should be a variable. This simple idea can make a lot of analysis tasks much easier. In many cases, this is straightforward. For example, the output of DESeq2 (a package that computes differential expression statistics for RNA-seq data) is already in tidy format, which each row representing a gene (observation) and each column representing an observation about that gene (expression level, fold change, P-value). In other cases, this will be tricky. 
+
+There are a lot of functions in base R you may have come across to these kinds of data manipulation tasks, such as *subset*, the *apply* family, and *merge*. But they have inconsistent syntax and can be difficult to learn.
+
+As an alternative, we will use the **tidyr** and **dplyr** packages written by Hadley Wickham (of ggplots and devtools fame). These tools provide a *consistent grammar for data manipulation*.
+
+
+#### Working with tidyr
+
+The goal of tidyr is to convert between 'wide' data and 'long' data. Long data is tidy data: each row is an observation, each column is a variable. Wide data has many columns for the same variable, one for each level of a classification variable. For example, here is some airline passenger data that comes packaged with R. This is in wide format (there is a separate column for each month).
+
+```{r}
+airpass
+```
+
+The gather() function in tidyr turns wide data into long data. 
+
+```{r}
+airpass2<-gather(data=airpass, key=Month, value=Passengers, Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec)
+head(airpass2, n=2)
+```
+
+The **gather()** function takes a data frame (or data-frame-like object), a key, a value, and the columns to be "gathered". In this case the key is month and the value is passengers. The key-value pair is the critical concept for using gather (and its counterpart, spread). The key is what the columns are in wide data, and value is the variable.
+
+gather() and essentially all tidyr/dplyr functions have some useful features to make things easier.
+
+1. You can (almost) always use column names like you would use column numbers in base R. So for example, rather than typing out every month, we can just get all the columns in between Jan and Dec, inclusive:
+
+```{r}
+airpass3<-gather(airpass, Month, Passengers, Jan:Dec)
+head(airpass3, n=2)
+```
+
+2. You can (almost) always use negated column names to mean everything but that column (or to remove a column):
+
+```{r}
+airpass4<-gather(airpass, Month, Passengers, -Year)
+head(airpass4, n=2)
+```
+
+#### Side Note: %>%
+
+The %>% operator acts like a Unix pipe in R. This means you can pass the output of one command to another in linear fashion, as opposed to having to use either nested operations or temporary objects. This makes your code much easier to read and debug. 
+
+Compare:
+
+```{r}
+airpass_long <- gather(as.tibble(airpass), Month, Passengers, -Year)
+```
+
+```{r}
+airpass_tibble <- as_tibble(airpass)
+airpass_long <- gather(airpass_tibble, Month, Passengers, -Year)
+```
+
+```{r}
+airpass_long <- airpass %>% 
+  as_tibble %>%
+  gather(Month, Passengers, -Year)
+```
+
+These all do the same thing, but the last one is the easiest to read and especially to extend with more commands.
+
+#### Additional tidyr commands: 
+
+*  `unite()` which is an easy way to make new (text) columns out of existing columns
+*  `separate()` which splits a text column into multiple new columns
+*  `spread()` which does the reverse of `gather()` and spreads a long data frame into a wide data frame
+
+We'll look at quick example of each using the airpass dataset, and then do some exercises with some additional datasets.
+
+```{r}
+airpass_long_2 <- airpass_long %>% unite(col=Date, Year, Month, sep="-", remove=T)
+airpass_long_2
+```
+
+```{r}
+airpass_long_2 %>% separate(col=Date, into=c("Year", "Month"), sep="-", remove=F)
+```
+
+A note about separate: the thing in the sep argument is interpretated as a regular expression. The default (which often works) is to separate on any non-alphanumeric character. Usually (but not always) single character expression will do what you expect. Regular expressions in R are a whole workshop on their own. If you do need to use separate on a complicated string, it may take some trial and error.
+
+```{r}
+airpass_long %>% spread(key=Month, value=Passengers)
+```
+
+###Exercises with tidyr functions
+
+####Exercise 1
+
+I gave you a file called "bird_immune_gene_res_simple.csv". This file contains the results from some comparative genomics work I recently published. where we looked across the bird tree of life and identified which genes were under selection. This file has a line for each gene, with the FDR-corrected p-values for a variety of models positive selection, and a few other variables of interest. 
+
+First, read this file into R with read_csv(). What is different between read_csv() and read.csv()? Call the object with read.csv() bird_genes_pvals_base, and the one with read_csv() bird_genes_pvals. How can you convert bird_genes_pvals_base into bird_genes_pvals?
+
+```{r}
+bird_genes_pvals_base <- read.csv("bird_immune_gene_res_simple.csv")
+bird_genes_pvals <- read_csv("bird_immune_gene_res_simple.csv")
+
+class(bird_genes_pvals_base)
+class(bird_genes_pvals)
+
+bird_genes_pvals_base %>%
+  as_tibble()
+```
+
+Use gather to convert the FDR-corrected p-values to a long format. Think about what should be the key, and what should be the value.  Store the new tibble in bird_genes_pvals_clean. Make sure to only include the relevant variables.
+
+```{r, echo=TRUE}
+bird_genes_pvals_clean <- bird_genes_pvals %>%
+  gather(test, pval, -entrezgene,-Prop_m2,-Omega_m2,-Omega_m0,-prop_sel_branches,-length,-nseq) %>% print
+```
+
+####Exercise 2, using spread
+
+There is a dataset on the count of M&Ms of various colors in a set of bags in mms (note: already in tibble format). Convert this to wide format using spread, so that we have separate columns for each color. Put it in a new tibble called mms_wide.
+
+```{r, echo=TRUE}
+mms_wide <- mms %>% spread(color, count) %>% print
+```
+
+####Exercise 3, putting it all together
+
+There is a dataset on US house prices in a data frame called housing. Look at this dataframe and make it tidy. You will need to: 
+1. convert to a tibble
+2. use gather to reformat as long data (one observation per row, one variable per column)
+3.use separate to split location into city and state columns (dropping location), and date into year and month columns (but keeping the date column)
+
+*Two hints:*
+First, there is a National.US column that you will want to keep as a separate variable for each.
+Second, note that the location (column names) use . for spaces, but that some cities (e.g. Las Vegas) also have a space. So when you use separate, you'll have to look at what to do with that extra field. Similarly, the date column uses dash to separate year-month-day, but you don't want to keep the day part. Check ?separate and look at the extra option to figure out what to do here.
+
+You should end up with this:
+
+```{r, echo = TRUE}
+housing_clean <- housing %>% as.tibble %>%
+  gather(location, local_index, -Date, -National.US) %>% 
+  separate(location, c("state", "city"),extra="merge") %>%
+  separate(Date, c("year", "month"), extra="drop", remove=F) %>%
+  print
+```
+
+
+## Subsetting and Manipulating Data with dplyr
+
+tidyr() does one thing well -- reformats data from wide to long, or long to wide (with the helper functions separate and unite which make these tasks easier if there are multiple classification variables).
+
+However most datasets require more than just reformating in this way. Organizing, updating, filtering, aggregating, and merging are all done with the dpylr package. In dpylr, as in tidyr, each action gets its own (verb) function -- so for example filtering data by rows is done with the filter() function. All of these functions have a very similar syntax to tidyr functions. 
+
+### Organizing/updating functions
+
+arrange(), rename(), select(), mutate() are used to sort data, rename columns, and upate/create columns
+
+We'll use the housing dataset to look at how these functions work.
+
+arrange() sorts by one or more columns, with subsequent columns used to break ties in earlier columns. E.g., 
+```{r}
+housing_clean %>% arrange(year, month)
+housing_clean %>% arrange(city, year)
+housing_clean %>% arrange(month,state)
+housing_clean %>% arrange(desc(year))
+```
+
+rename() renames a column:
+
+```{r}
+housing_clean %>% arrange(year, month, state, city) %>%
+  rename(national_index = National.US)
+```
+
+select() selects columns to keep. Note that we can simulatenously rename and reorder columns:
+
+```{r}
+housing_clean %>% arrange(year, month, state, city) %>%
+  select(year, month, city, state, local_index, national_index = National.US)
+```
+
+distinct() is like unique(), and can be used to idnetify all unique values in your call set:
+
+```{r}
+housing_clean %>%
+  select(state,city) %>%
+  distinct
+```
+
+mutate() creates new columns, or updates existing ones, while keeping everthing else unchanged (transmute does the same but drops other columns).
+
+```{r}
+housing_clean %>% arrange(year, month, state, city) %>%
+  select(year, month, city, state, local_index, national_index = National.US) %>%
+  mutate(month = month.abb[as.integer(month)])
+```
+
+We can include several mutate calls at once:
+
+```{r}
+housing_clean %>% arrange(year, month, state, city) %>%
+  select(year, month, city, state, local_index, national_index = National.US) %>%
+  mutate(month = month.abb[as.integer(month)], city=sub(".", "_", city, fixed=TRUE), rel_index = local_index/national_index)
+```
+
+Now we can chain everything together to generate our clean data from scratch in one go.
+
+```{r}
+housing_clean <- housing %>% 
+  as.tibble %>%
+  gather(location, local_index, -Date, -National.US) %>% 
+  separate(location, c("state", "city"),extra="merge") %>%
+  separate(Date, c("year", "month"), extra="drop", remove=F) %>%
+  select(year, month, city, state, local_index, national_index=National.US) %>%
+  arrange(year, month, state, city) %>%
+  mutate(year = as.integer(year), month = month.abb[as.integer(month)], city = sub(".", "_", city, fixed=TRUE), rel_index = local_index/national_index)
+```
+
+Let's save housing_clean as a new object to use tomorrow. We will write it to a csv file with write_csv.
+
+```{r}
+write_csv(housing_clean,"housing_dataset_clean.csv")
+```
+
+
+## Exercises using dpylr functions
+
+We'll turn back to our bus dataset (called bus) in order to try some exercises with these functions. First, let's load it, this time using the tidyr read_delim() function, and take a minute just to review what is there.
+
+```{r}
+bus<-read_delim(file="mbta_bus.tsv", delim="\t")
+```
+
+### Exercise 1:
+What are all of the different bus types?
+Hint: Use distinct and select
+
+```{r, echo=TRUE}
+bus %>%
+  select(type) %>%
+  distinct %>%
+  print
+```
+
+
+### Exercise 2: 
+What is the least expensive bus route to run per passenger (least cost.per.pax)?
+What is the most expensive bus route to run per passenger (greatest cost.per.pax)?
+Hint, this will reqire two separate function calls. Use arrange and select.
+
+```{r, echo=TRUE}
+bus %>%
+  arrange(cost.per.pax) %>%
+  select(route,cost.per.pax) %>%
+  head(n=1)
+
+bus %>%
+  arrange(desc(cost.per.pax)) %>%
+  select(route,cost.per.pax) %>%
+  head(n=1)
+```
+
+
+
+## Filtering functions
+
+Sometimes we need to filter datasets, and we can do this by selecting rows that meet logical conditions. We set these up with logical tests.
+
+The filter() function can be used to select rows meeting these conditions:
+
+```{r}
+housing_clean %>%
+  filter(city == "Boston")
+```
+
+We can give filter many logical tests, all separated by commas. These are linked by logical and (all must be true to select that row):
+
+```{r}
+housing_clean %>%
+  filter(city=="Boston", month=="Aug")
+```
+
+If we want to use other booleans, just put them in one statement, e.g.:
+
+```{r}
+housing_clean %>%
+  filter(city=="Boston", month == "Aug" | month == "Jan")
+```
+
+Note that we can combine filters and the other statements to get useful subsets, for example let's say we want to see three years when the relative index in Boston was the highest (as of Jan):
+
+```{r}
+housing_clean %>%
+  filter(city=="Boston", month=="Jan") %>% 
+  arrange(desc(rel_index)) %>%
+  select(year,rel_index) %>%
+  head(n=3)
+```
+
+Finally, many times you want to filter out missing data (typically indicated by `NA` in R), prior to conducting any analyses. To do this, we an use the `is.na()` fuction, which will return a vector with TRUE if NA is present, and FALSE otherwise. For example, let's identify all rows that are missing the local_index in housing_clean.
+
+```{r}
+housing_clean %>%
+  filter(is.na(local_index))
+```
+
+To get the inverse for this (or any logical statement), simply add a `!` to the front.
+
+```{r}
+housing_clean %>%
+  filter(!is.na(local_index))
+```
+
+## Exercises using dpylr functions to manipulate datasets
+
+We'll turn to pur bird immune gene comparative genomics dataset, with the bird_genes_pvals object we read in earlier.
+### Exercise 1: 
+
+Sort the dataset from longest to shortest gene. What is the longest gene and is it under selection with busted (FDRPval_busted)?
+Hint: Use arrange and select
+
+```{r, echo=TRUE}
+
+bird_genes_pvals %>%
+  arrange(desc(length)) %>%
+  select(entrezgene,length,FDRPval_busted) %>% head(n=1)
+```
+
+### Exercise 2:
+
+Look at just the gene id (entrezgene), Busted FDR-corrected P-value, proportion of individual species under selection (prop_sel_branches), and the number of sequences included (nseq) for the 10 shortest genes. (Keep length in the output). 
+
+```{r, echo=TRUE}
+bird_genes_pvals %>%
+  arrange(length) %>% 
+  select(entrezgene, FDRPval_busted, prop_sel_branches, nseq, length) %>% 
+  head(n=10)
+```
+
+### Exercise 3: 
+
+Look at just genes with an entrezgene ID (not NA), use the same columns as exercise 2, but this time get the 10 longest genes, renaming the length column in the output to alignment_length.
+
+```{r, echo=TRUE}
+bird_genes_pvals %>%
+  filter(!is.na(entrezgene)) %>%
+  arrange(desc(length)) %>% 
+  select(entrezgene, FDRPval_busted, prop_sel_branches, nseq, alignment_length=length) %>% 
+  head(n=10)
+```
+
+### Exercise 4: 
+
+Repeat exercise 3, but this time remove any genes with no proportion of selected branches. Convert the proportion of selected branches (prop_sel_branches) to the percentage of selected branches using mutate() (called perc_sel_branches). 
+
+```{r, echo=TRUE}
+bird_genes_pvals %>%
+  filter(!is.na(entrezgene), prop_sel_branches != "NaN") %>%
+  arrange(desc(length)) %>% 
+  select(entrezgene, FDRPval_busted, prop_sel_branches, nseq, alignment_length=length) %>% 
+  mutate(perc_sel_branches=prop_sel_branches*100) %>%
+  head(n=10)
+```
+
+### Exercise 5: 
+
+Repeat exercise 4, but this time only use genes with 25, 37 or 40 sequences, and sort the top 10 by the percentage of selected branches (most to least).
+
+Hint: bird_genes_pvals %>% slice(1:10) returns a tibble, as does head(n=10)
+```{r, echo=TRUE}
+bird_genes_pvals %>%
+  filter(!is.na(entrezgene), prop_sel_branches != "NaN") %>%
+  filter(nseq == 25 | nseq == 37 | nseq == 40) %>%
+  arrange(desc(length)) %>% 
+  select(entrezgene, FDRPval_busted, prop_sel_branches, nseq, alignment_length=length) %>% 
+  mutate(perc_sel_branches=prop_sel_branches*100) %>%
+  head(n=10) %>%
+  arrange(desc(perc_sel_branches))
+```
+
