@@ -1,5 +1,8 @@
 ---
-title: "intermediate_R_part_1.Rmd"
+title: "Intro to Bits of Tidyverse"
+subtitle: "Bioinformatics Coffee Hour"
+date: "May 5, 2020"
+author: "Brian Arnold"
 output: html_document
 ---
 
@@ -7,9 +10,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Intermediate R Part 1
+# Introduction
 
-The goal of this workshop is to build on R fundamentals we began in the Introduction to R class. In that class we learned how to read and write files and what objects are. This workshop will introduce data manipulation with the tidyverse, including: tidy data (long vs. wide form objects), how to transform data objects using dplyr commands, object filtering, summarizing and aggregating data. 
+This lesson will introduce data manipulation with the tidyverse, including: tidy data (long vs. wide form objects), how to transform data objects using dplyr commands, object filtering, summarizing and aggregating data. 
 
 ##R packages and the tidyverse
 
@@ -18,19 +21,28 @@ Data frames are a very useful type of base R object. Base R means that it is a n
 The way to install new packages you have never used before in R is with the command `install.packages()`, as we demonstrate below:
 
 ```{r}
+## NOTE that tidyverse is already installed
 #install.packages("tidyverse")
 ```
 
-Before going further, we need to set up our working environment. As in the Introduction to R course, we will set our working directory and load the **tidyverse** package we just installed. We will also source the **prep_data.R** script in order to load some datasets for us to work with.
+Before going further, we need to set up our working environment. We will set our working directory and load the **tidyverse** package. We will also load some datasets for us to work with.
 
 Note that you only need to load an R package once per session, but you do need to re-load every time you restart R. It is good practice to load all packages at the top of your R script.
 
 I will also point out that the [tidyverse style guide](http://style.tidyverse.org) offers some good advice on coding style to help make your code easier to read and write. I highly recommend taking a look and implementing many of these design suggestions.
 
 ```{r}
-setwd("~/Dropbox/Workshops/August_2019_Bioinformatics_Shortcourse_Workshops/intro_to_R/")
+setwd("~/tidyverse")
 library(tidyverse)
-source("prep_data.R")
+
+download.file("https://raw.githubusercontent.com/harvardinformatics/micro-course/nanocourse_2019/r/data/bird_immune_gene_res_simple.csv", "bird_immune_gene_res_simple.csv")
+
+housing<-read.csv("https://raw.githubusercontent.com/datasets/house-prices-us/master/data/cities-month.csv", stringsAsFactors=F, strip.white = T)
+housing=housing[c(1:(length(housing)-3),length(housing))]
+
+mms<-read.table("http://www.randomservices.org/random/data/MM.txt", header=TRUE,stringsAsFactors=F)
+mms$BagID = seq(1:length(mms$Red))
+mms <- mms %>% tbl_df %>% gather(color, count, -Weight, -BagID) %>% arrange(BagID,color)
 ```
 
 ###Tibbles
@@ -40,7 +52,7 @@ In the introduction to R course, we were working with data frames. The tidyverse
 ```{r}
 df1<-data.frame(label=c("rep1", "rep2", "rep3", "rep4"), data=c(23, 34, 15, 19))
 
-tbdf1 <- as_tibble(df1)
+tbdf1 <- as.tibble(df1)
 tbdf1
 ```
 
@@ -61,6 +73,11 @@ As an alternative, we will use the **tidyr** and **dplyr** packages written by H
 The goal of tidyr is to convert between 'wide' data and 'long' data. Long data is tidy data: each row is an observation, each column is a variable. Wide data has many columns for the same variable, one for each level of a classification variable. For example, here is some airline passenger data that comes packaged with R. This is in wide format (there is a separate column for each month).
 
 ```{r}
+data(AirPassengers)
+airpass<-as.data.frame(t(matrix(AirPassengers,12,dimnames=list(month.abb,unique(floor(time(AirPassengers)))))))
+airpass$Year = rownames(airpass)
+rownames(airpass)<-NULL
+airpass<-airpass[c(13,1:12)]
 airpass
 ```
 
@@ -100,13 +117,13 @@ airpass_long <- gather(as.tibble(airpass), Month, Passengers, -Year)
 ```
 
 ```{r}
-airpass_tibble <- as_tibble(airpass)
+airpass_tibble <- as.tibble(airpass)
 airpass_long <- gather(airpass_tibble, Month, Passengers, -Year)
 ```
 
 ```{r}
 airpass_long <- airpass %>% 
-  as_tibble %>%
+  as.tibble %>%
   gather(Month, Passengers, -Year)
 ```
 
@@ -151,7 +168,7 @@ class(bird_genes_pvals_base)
 class(bird_genes_pvals)
 
 bird_genes_pvals_base %>%
-  as_tibble()
+  as.tibble()
 ```
 
 Use gather to convert the FDR-corrected p-values to a long format. Think about what should be the key, and what should be the value.  Store the new tibble in bird_genes_pvals_clean. Make sure to only include the relevant variables.
@@ -274,7 +291,7 @@ write_csv(housing_clean,"housing_dataset_clean.csv")
 We'll turn back to our bus dataset (called bus) in order to try some exercises with these functions. First, let's load it, this time using the tidyr read_delim() function, and take a minute just to review what is there.
 
 ```{r}
-bus<-read_delim(file="mbta_bus.tsv", delim="\t")
+bus<-read_delim(file="data/mbta_bus.tsv", delim="\t")
 ```
 
 ### Exercise 1:
