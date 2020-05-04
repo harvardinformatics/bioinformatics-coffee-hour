@@ -117,12 +117,12 @@ housing_clean %>% arrange(year, month, state, city) %>%
 We can include several mutate calls at once:
 
 ```{r}
-housing_clean %>% arrange(year, month, state, city) %>%
+housing_clean <- housing_clean %>% arrange(year, month, state, city) %>%
   select(year, month, city, state, local_index, national_index = National.US) %>%
   mutate(month = month.abb[as.integer(month)], city=sub(".", "_", city, fixed=TRUE), rel_index = local_index/national_index)
 ```
 
-Let's save housing_clean as a new object to use tomorrow. We will write it to a csv file with write_csv.
+Note the reassignment. Let's save housing_clean as a new object to use next time. We will write it to a csv file with write_csv.
 
 ```{r}
 write_csv(housing_clean,"housing_dataset_clean.csv")
