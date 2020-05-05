@@ -1,5 +1,5 @@
 ---
-title: "Intro to Bits of Tidyverse"
+title: "Tidyverse Tibbles and Bits"
 subtitle: "Bioinformatics Coffee Hour"
 date: "May 5, 2020"
 author: "Brian Arnold"
