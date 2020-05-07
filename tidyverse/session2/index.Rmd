@@ -173,5 +173,7 @@ housing_clean %>%
 ```
 This breaks because at the point summarize() is used, we've created a new tibble with two columns: city and mean_rel_index, which is an average across all months and all years for each city (because we grouped by city). Since we had not filtered on the particular month of February by that part of the code, the mean is now calculated for all data so these numbers will be different than before (and not what the question asked for!). Then, when we try to filter on the month of February, our tibble at that point no onger has a column corresponding to months!
 
+This breaking emphasizes that we cannot just selecting a bunch of operations that we want to do and expect R to figure everything out. Because of the use of pipes and the flow of information, the sequence of operations matters here. We must use logic and our understanding of these functions (that summarize produces a new tibble) to figure out what order of operations is needed to get what we want.
+
 Try running each line of the code, starting with the first 2 lines, then the first 3 lines etc to see exactly where the code breaks. This will give us an idea of how to fix our code!
 
