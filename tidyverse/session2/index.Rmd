@@ -1,0 +1,179 @@
+---
+title: "Tidyverse Tibbles and Bits"
+subtitle: "Bioinformatics Coffee Hour"
+date: "May 11 2020"
+author: "Brian Arnold"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Making data tidy with tidyr
+
+The goal of tidyr is to convert between 'wide' data and 'long' data. Long data is tidy data: each row is an observation, each column is a variable. Wide data has many columns for the same variable, one for each level of a classification variable. For example, we will use some data on M&Ms to illustrate the differences between these two different formats and why you should care about knowing how to convert between them.
+
+```{r}
+mms_wide <-read.table("http://www.randomservices.org/random/data/MM.txt", header=TRUE,stringsAsFactors=F)
+mms_wide$BagID = seq(1:length(mms_wide$Red))
+```
+
+mms_wide is in wide format: there are many columns for the various colors. This data would be more tidy if instead we had 1.) a column representing color as a variable that could take on one of the 6 values and 2.) a corresponding column that contained the count data for each of these colors.
+
+We can use the pivot_longer() function to convert from wide format to long format:
+```{r}
+mms_long <- mms_wide %>% 
+  as_tibble %>% 
+  pivot_longer(cols=c(-Weight, -BagID), names_to="color", values_to="count") %>% 
+  arrange(BagID,color)
+```
+
+We need to select which columns to use for this operation. One way to do this would be to list all the columns. An alternative way (that we used here) would be to list all the columns you DO NOT want to use by preceding their names with "-".
+
+However, say we inherited our data table in long format but would like it in wide format, we may also convert our data from long back to (the original) wide format using pivot_wider():
+```{r}
+mms_wide2 <- mms_long %>%
+  pivot_wider(names_from="color", values_from="count")
+```
+
+While it may sound pointless at first to transform our data table in a way that makes it have either more columns or rows (at least it did to me!), it actually is extremely useful for analyzing features of these data using relatively little code.
+
+To illustrate, let's use the 'summarize' function from dplyr. Say we wanted to know the total number of M&Ms in the dataset. In wide format, we'd have to go across all the columns, one for each color. In long format, these data are now in a single column named 'count':
+```{r}
+mms_long %>% summarize(total_mms=sum(count))
+```
+
+However, it gets even more interesting when we also use the group_by() function (also from dplyr), which is able to communicate to the summarize function to tell it how to summarize the data. For instance, group_by is able to analyze our data as a function of the "color" variable we created when we converted to long format. Here, we can see how many observations there are per color.
+```{r}
+mms_long %>%
+  group_by(color) %>%
+  summarize( mms_per_color=sum(count) )
+```
+
+Note 1: the summarize function outputs a new tibble, which contains a new column we created (named 'mms_per_color') that contains the summed count data. You can continue to do calculations on this tibble (for example, calculate the variance of colors), but you cannot call your original tibble again within the same set of pipes.
+
+Note 2: we could have also done this by hand with the data in wide format, summing all the values underneath a column that corresponds to 'Red', 'Blue', etc... but it would be much more tedious and involve more code. Using less code is preferable because it can get difficult to read and understand code that is unecessarily long, especially if it involves many complex procedures. Writing clean code can also help the author understand their own code faster when they come back to it after not having thought about it for months (or however long it takes reviews to come back from a journal!).
+
+Instead of summing over all bags of M&Ms for a each color, we can use the mean() function within summarize() to get the mean number of M&Ms for a each color.
+```{r}
+mms_long %>%
+  group_by(color) %>%
+  summarize( mean_mms_per_color=mean(count) )
+```
+
+Here is another example where we analyze our data by BagID. After we use the summarize function once, we use the resulting tibble and pipe it to a second summarize function that analyzes this new tibble to get the total number of M&Ms in the data:
+```{r}
+mms_long %>%
+  group_by(BagID) %>%
+  summarize(mms_per_bag=sum(count)) %>% 
+  print %>% 
+  summarize(total_mms=sum(mms_per_bag))
+```
+
+Let's do some trickier stuff combining summarize, group_by, and mutate (to create a new column). Here we  compute the fraction of each color in each bag and store this in a new column:
+```{r}
+mms_long %>%
+  group_by(BagID) %>%
+  mutate( percent = 100*(count/sum(count)) )
+```
+
+Note there is some subtle stuff going on here. The group_by function 'communicates' to the mutate function. Here we use mutate on a grouped tibble (by BagID), so operations within the mutate function like sum() work **within the grouping**. So sum(count) computes the group-wise sum, which means it is easy to get frequencies or percents.
+
+To more easily visualize these data (all percentages for a particular BagID on the same line/row), lets convert it to wide format just for printing to screen:
+```{r}
+mms_long %>%
+  group_by(BagID) %>%
+  mutate(percent = 100*(count/sum(count))) %>%
+  select(-count) %>%
+  spread(color, percent)
+```
+
+We can then use this insight to explore the data. For example, let's get the 5 bags of M&Ms with the highest percentage of red candies, conditioning on a weight of at least 47g:
+```{r}
+mms %>%
+  group_by(BagID) %>%
+  mutate(percent = 100*(count/sum(count))) %>%
+  select(-count) %>%
+  filter(color == "Red", Weight > 47) %>%
+  arrange(desc(percent)) %>%
+  head(n=5)
+```
+
+Note that we can send this to plotting functions like so:
+```{r}
+mms %>%
+  group_by(BagID) %>%
+  mutate(percent = 100*(count/sum(count))) %>%
+  select(-count) %>%
+  filter(color == "Red", Weight > 47) %>%
+  ggplot(aes(percent)) +
+  geom_histogram(bins=15,fill="red")
+```
+
+
+Let's do a problem to help commit these concepts to memory (and to get used to thinking of which functions we need based on how a problem/question is phrased). We will reload the housing dataset from before, and processes it in a few ways that I'll skip for the moment:
+
+```{r}
+housing<-read.csv("https://raw.githubusercontent.com/datasets/house-prices-us/master/data/cities-month.csv", stringsAsFactors=F, strip.white = T)
+housing=housing[c(1:(length(housing)-3),length(housing))]
+ 
+housing_clean <- housing %>% 
+  as.tibble %>% 
+  pivot_longer(cols=c(-Date, -National.US), names_to="location", values_to="local_index") %>% 
+  separate(location, c("state", "city"),extra="merge") %>% 
+  separate(Date, c("year", "month"), extra="drop", remove=F) %>% 
+  select(year, month, city, state, local_index, national_index=National.US) %>% 
+  arrange(year, month, state, city) %>% 
+  mutate(year = as.integer(year), month = month.abb[as.integer(month)], city = sub(".", "_", city, fixed=TRUE), rel_index = local_index/national_index)
+```
+
+
+# Exercises with summarize and group_by
+
+
+### Problem
+
+Using the housing_clean dataset, find the three cities with the highest relative index in February, averaged across the years. Get rid of missing data for this analysis too!
+
+1.) This question is asking us to analyze **cities**, so we should probably group by that variable.
+2.) It only wants us to consider February, so we should probably filter on that. While we're doing that, we might as well filter on missing data too using !is.na().
+3a.) We want to study the *averaged* relative index for each city, so we can probably put that variable into the summarize function with mean(). 
+3b.) If we group by city and then follow this with a summarize function, it will summarize across all observations for each city, which have data for every month of every year. The questions asks us to only average across the years for the month of February, so we should definitely filter our data before using the summarize function.
+4.) It also asks us for the cities with the 3 highest mean relative indices, so lets just arrange our results by the mean relative index and peek at the first 3
+
+
+```{r, echo=TRUE}
+housing_clean %>% 
+  filter(month=="Feb", !is.na(rel_index)) %>% 
+  group_by(city) %>% 
+  summarize(mean_rel_index = mean(rel_index)) %>% 
+  arrange(desc(mean_rel_index)) %>% 
+  head(n=3)
+```
+
+Using the logic of classical genetics, let's understand how this works by breaking it :). Let's switch around the functions to see why their order is important. Let's use the filter function second, after grouping by city:
+```{r, echo=TRUE}
+housing_clean %>% 
+  group_by(city) %>% 
+  filter(month=="Feb", !is.na(rel_index)) %>% 
+  summarize(mean_rel_index = mean(rel_index)) %>% 
+  arrange(desc(mean_rel_index)) %>% 
+  head(n=3)
+```
+
+We get the same results! How about if we move the filter statement down again, making it the thrid operation:
+```{r, echo=TRUE}
+housing_clean %>% 
+  group_by(city) %>% 
+  summarize(mean_rel_index = mean(rel_index)) %>% 
+  filter(month=="Feb", !is.na(rel_index)) %>% 
+  arrange(desc(mean_rel_index)) %>% 
+  head(n=3)
+```
+This breaks because at the point summarize() is used, we've created a new tibble with two columns: city and mean_rel_index, which is an average across all months and all years for each city (because we grouped by city). Since we had not filtered on the particular month of February by that part of the code, the mean is now calculated for all data so these numbers will be different than before (and not what the question asked for!). Then, when we try to filter on the month of February, our tibble at that point no onger has a column corresponding to months!
+
+This breaking emphasizes that we cannot just selecting a bunch of operations that we want to do and expect R to figure everything out. Because of the use of pipes and the flow of information, the sequence of operations matters here. We must use logic and our understanding of these functions (that summarize produces a new tibble) to figure out what order of operations is needed to get what we want.
+
+Try running each line of the code, starting with the first 2 lines, then the first 3 lines etc to see exactly where the code breaks. This will give us an idea of how to fix our code!
+
