@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 The goal of tidyr is to convert between 'wide' data and 'long' data. Long data is tidy data: each row is an observation, each column is a variable. Wide data has many columns for the same variable, one for each level of a classification variable. For example, we will use some data on M&Ms to illustrate the differences between these two different formats and why you should care about knowing how to convert between them.
 
 ```{r}
+library(tidyverse)
 mms_wide <-read.table("http://www.randomservices.org/random/data/MM.txt", header=TRUE,stringsAsFactors=F)
 mms_wide$BagID = seq(1:length(mms_wide$Red))
 ```
@@ -71,14 +72,14 @@ mms_long %>%
   summarize(total_mms=sum(mms_per_bag))
 ```
 
-Let's do some trickier stuff combining summarize, group_by, and mutate (to create a new column). Here we  compute the fraction of each color in each bag and store this in a new column:
+Let's do some trickier stuff combining group_by and mutate (to create a new column). Here we  compute the fraction of each color in each bag and store this in a new column:
 ```{r}
 mms_long %>%
   group_by(BagID) %>%
   mutate( percent = 100*(count/sum(count)) )
 ```
 
-Note there is some subtle stuff going on here. The group_by function 'communicates' to the mutate function. Here we use mutate on a grouped tibble (by BagID), so operations within the mutate function like sum() work **within the grouping**. So sum(count) computes the group-wise sum, which means it is easy to get frequencies or percents.
+Note there is some subtle stuff going on here. The group_by function communicates to the mutate function. Here we use mutate on a grouped tibble (by BagID), so operations within the mutate function like sum() work **within the grouping**. So sum(count) computes the group-wise sum, which means it is easy to get frequencies or percents.
 
 To more easily visualize these data (all percentages for a particular BagID on the same line/row), lets convert it to wide format just for printing to screen:
 ```{r}
@@ -86,12 +87,12 @@ mms_long %>%
   group_by(BagID) %>%
   mutate(percent = 100*(count/sum(count))) %>%
   select(-count) %>%
-  spread(color, percent)
+  pivot_wider(names_from=color, values_from=percent)
 ```
 
 We can then use this insight to explore the data. For example, let's get the 5 bags of M&Ms with the highest percentage of red candies, conditioning on a weight of at least 47g:
 ```{r}
-mms %>%
+mms_long %>%
   group_by(BagID) %>%
   mutate(percent = 100*(count/sum(count))) %>%
   select(-count) %>%
@@ -102,7 +103,7 @@ mms %>%
 
 Note that we can send this to plotting functions like so:
 ```{r}
-mms %>%
+mms_long %>%
   group_by(BagID) %>%
   mutate(percent = 100*(count/sum(count))) %>%
   select(-count) %>%
