@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Making data tidy with tidyr
 
-The goal of tidyr is to convert between 'wide' data and 'long' data. Long data is tidy data: each row is an observation, each column is a variable. Wide data has many columns for the same variable, one for each level of a classification variable. For example, we will use some data on M&Ms to illustrate the differences between these two different formats and why you should care about knowing how to convert between them 
+The goal of tidyr is to convert between 'wide' data and 'long' data. Long data is tidy data: each row is an observation, each column is a variable. Wide data has many columns for the same variable, one for each level of a classification variable. For example, we will use some data on M&Ms to illustrate the differences between these two different formats and why you should care about knowing how to convert between them.
 
 ```{r}
 mms_wide <-read.table("http://www.randomservices.org/random/data/MM.txt", header=TRUE,stringsAsFactors=F)
@@ -37,21 +37,21 @@ mms_wide2 <- mms_long %>%
   pivot_wider(names_from="color", values_from="count")
 ```
 
-While it may sound pointless at first to transform our data table in a way that makes it have either more columns or rows (at least it did to me!), it actually is extremely useful for analyzing features of these data with relatively little code.
+While it may sound pointless at first to transform our data table in a way that makes it have either more columns or rows (at least it did to me!), it actually is extremely useful for analyzing features of these data using relatively little code.
 
-To illustrate, let's use the 'summarize' function from dplyr. Say we wanted to know the total number of M&Ms in the dataset. In wide format, we'd have to go across all the columns. In long format, these data are now in a single column:
+To illustrate, let's use the 'summarize' function from dplyr. Say we wanted to know the total number of M&Ms in the dataset. In wide format, we'd have to go across all the columns, one for each color. In long format, these data are now in a single column named 'count':
 ```{r}
 mms_long %>% summarize(total_mms=sum(count))
 ```
 
-However, it gets even more interesting when we also use the group_by() function (also from dplyr), which is able to 'communicate' to the summarize function to tell it how to summarize the data. For instance, group_by is able to analyze our data as a function of the "color" variable we created when we converted to long format. Here, we can see how many observations there are per color.
+However, it gets even more interesting when we also use the group_by() function (also from dplyr), which is able to communicate to the summarize function to tell it how to summarize the data. For instance, group_by is able to analyze our data as a function of the "color" variable we created when we converted to long format. Here, we can see how many observations there are per color.
 ```{r}
 mms_long %>%
   group_by(color) %>%
   summarize( mms_per_color=sum(count) )
 ```
 
-Note 1: the summarize function outputs a new tibble, which contains a new column we created (named 'mms_per_color') that contains the summed count data. You can continue to do calculations on this tibble (for example, if your data has many layers), but you cannot call your original tibble again within the same set of pipes.
+Note 1: the summarize function outputs a new tibble, which contains a new column we created (named 'mms_per_color') that contains the summed count data. You can continue to do calculations on this tibble (for example, calculate the variance of colors), but you cannot call your original tibble again within the same set of pipes.
 
 Note 2: we could have also done this by hand with the data in wide format, summing all the values underneath a column that corresponds to 'Red', 'Blue', etc... but it would be much more tedious and involve more code. Using less code is preferable because it can get difficult to read and understand code that is unecessarily long, especially if it involves many complex procedures. Writing clean code can also help the author understand their own code faster when they come back to it after not having thought about it for months (or however long it takes reviews to come back from a journal!).
 
