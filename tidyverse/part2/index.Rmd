@@ -72,7 +72,7 @@ mms_long %>%
   summarize(total_mms=sum(mms_per_bag))
 ```
 
-Let's do some trickier stuff combining group_by and mutate (to create a new column). Here we  compute the fraction of each color in each bag and store this in a new column:
+Let's instead combine the group_by function with mutate. Here, mutate() creates a new column for the current tibble, instead of the summarize() function above which creates an entirely new tibble. Let's compute the fraction of each color in each bag and store this in a new column:
 ```{r}
 mms_long %>%
   group_by(BagID) %>%
@@ -112,6 +112,7 @@ mms_long %>%
   geom_histogram(bins=15,fill="red")
 ```
 
+## Bonus material
 
 Let's do a problem to help commit these concepts to memory (and to get used to thinking of which functions we need based on how a problem/question is phrased). We will reload the housing dataset from before, and processes it in a few ways that I'll skip for the moment:
 
@@ -130,7 +131,7 @@ housing_clean <- housing %>%
 ```
 
 
-# Exercises with summarize and group_by
+### Exercises with summarize and group_by
 
 
 ### Problem
