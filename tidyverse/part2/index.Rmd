@@ -63,15 +63,6 @@ mms_long %>%
   summarize( mean_mms_per_color=mean(count) )
 ```
 
-Here is another example where we analyze our data by BagID. After we use the summarize function once, we use the resulting tibble and pipe it to a second summarize function that analyzes this new tibble to get the total number of M&Ms in the data:
-```{r}
-mms_long %>%
-  group_by(BagID) %>%
-  summarize(mms_per_bag=sum(count)) %>% 
-  print %>% 
-  summarize(total_mms=sum(mms_per_bag))
-```
-
 Let's instead combine the group_by function with mutate. Here, mutate() creates a new column for the current tibble, instead of the summarize() function above which creates an entirely new tibble. Let's compute the fraction of each color in each bag and store this in a new column:
 ```{r}
 mms_long %>%
@@ -86,7 +77,6 @@ To more easily visualize these data (all percentages for a particular BagID on t
 mms_long %>%
   group_by(BagID) %>%
   mutate(percent = 100*(count/sum(count))) %>%
-  select(-count) %>%
   pivot_wider(names_from=color, values_from=percent)
 ```
 
@@ -101,17 +91,6 @@ mms_long %>%
   head(n=5)
 ```
 
-Note that we can send this to plotting functions like so:
-```{r}
-mms_long %>%
-  group_by(BagID) %>%
-  mutate(percent = 100*(count/sum(count))) %>%
-  select(-count) %>%
-  filter(color == "Red", Weight > 47) %>%
-  ggplot(aes(percent)) +
-  geom_histogram(bins=15,fill="red")
-```
-
 ## Bonus material
 
 Let's do a problem to help commit these concepts to memory (and to get used to thinking of which functions we need based on how a problem/question is phrased). We will reload the housing dataset from before, and processes it in a few ways that I'll skip for the moment:
@@ -121,7 +100,7 @@ housing<-read.csv("https://raw.githubusercontent.com/datasets/house-prices-us/ma
 housing=housing[c(1:(length(housing)-3),length(housing))]
  
 housing_clean <- housing %>% 
-  as.tibble %>% 
+  as_tibble %>% 
   pivot_longer(cols=c(-Date, -National.US), names_to="location", values_to="local_index") %>% 
   separate(location, c("state", "city"),extra="merge") %>% 
   separate(Date, c("year", "month"), extra="drop", remove=F) %>% 
@@ -140,8 +119,7 @@ Using the housing_clean dataset, find the three cities with the highest relative
 
 1.) This question is asking us to analyze **cities**, so we should probably group by that variable.
 2.) It only wants us to consider February, so we should probably filter on that. While we're doing that, we might as well filter on missing data too using !is.na().
-3a.) We want to study the *averaged* relative index for each city, so we can probably put that variable into the summarize function with mean(). 
-3b.) If we group by city and then follow this with a summarize function, it will summarize across all observations for each city, which have data for every month of every year. The questions asks us to only average across the years for the month of February, so we should definitely filter our data before using the summarize function.
+3.) We want to study the *averaged* relative index for each city, so we can probably put that variable into the summarize function with mean(). 
 4.) It also asks us for the cities with the 3 highest mean relative indices, so lets just arrange our results by the mean relative index and peek at the first 3
 
 
@@ -154,7 +132,7 @@ housing_clean %>%
   head(n=3)
 ```
 
-Using the logic of classical genetics, let's understand how this works by breaking it :). Let's switch around the functions to see why their order is important. Let's use the filter function second, after grouping by city:
+Let's understand how this works more by breaking it :). Let's switch around the functions to see why their order is important. Let's use the filter function second, after grouping by city:
 ```{r, echo=TRUE}
 housing_clean %>% 
   group_by(city) %>% 
@@ -164,7 +142,7 @@ housing_clean %>%
   head(n=3)
 ```
 
-We get the same results! How about if we move the filter statement down again, making it the thrid operation:
+We get the same results! How about if we move the filter statement down again, making it the third operation:
 ```{r, echo=TRUE}
 housing_clean %>% 
   group_by(city) %>% 
