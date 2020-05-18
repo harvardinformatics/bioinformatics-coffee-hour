@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - bash_kernel
+  - snakemake>=5.2, <5.11
+  - fastqc
+  - multiqc

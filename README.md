@@ -8,3 +8,4 @@
 | Tues, May 5, 2020 | [Tidyverse (part 1)](/tidyverse/part1/index.Rmd) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2020-05-05_tidyverse_part1?urlpath=rstudio) |
 | Tues, May 12, 2020 | [Tidyverse (part 2)](/tidyverse/part2/index.Rmd) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2020-05-12_tidyverse_part2?urlpath=rstudio) |
 | Tues, May 19, 2020 | [Intro to bedtools](/bedtools/index.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2020-05-19_bedtools?urlpath=lab/tree/bedtools/index.ipynb) |
+| Tues, May 26, 2020 | [Snakemake](/snakemake/index.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2020-05-26_snakemake?urlpath=lab/tree/snakemake/index.ipynb) |
