@@ -10,3 +10,4 @@
 | Tues, May 19, 2020 | [Intro to bedtools](/bedtools/index.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2020-05-19_bedtools?urlpath=lab/tree/bedtools/index.ipynb) |
 | Tues, May 26, 2020 | [Snakemake](/snakemake/index.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2020-05-26_snakemake?urlpath=lab/tree/snakemake/index.ipynb) |
 | Tues, June 16, 2020 | [Unix Pipes](/unix-pipes/index.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2020-06-16_unix-pipes?urlpath=lab/tree/unix-pipes/index.ipynb) |
+| Tues, June 23, 2020 | [Samtools](/samtools/index.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/master?urlpath=lab/tree/samtools/index.ipynb) |
