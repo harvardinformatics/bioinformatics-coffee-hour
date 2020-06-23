@@ -23,7 +23,7 @@ Once you've obtained your mapped reads in BAM/SAM format (from BWA, bowtie, mini
  ___
 One of the most useful tools for the first processing of mapped reads is `samtools view`, which allows you to view the contents of a BAM/SAM file in SAM format:
 
-`samtools view file.bam | head`
+`samtools view data/file.sorted.bam | head`
 
 | **Column**|  **Description** |
 |-----|---|
@@ -43,8 +43,8 @@ One of the most useful tools for the first processing of mapped reads is `samtoo
 ### Viewing specific regions
 By default `samtools view` prints all alignments, but you can specify a specific chromosome or subregion to only print alignments in that window:
 
-`samtools view file.bam 1 | head`  
-`samtools view file.bam 1:1-1000 | head`
+`samtools view data/file.sorted.bam 1 | head`  
+`samtools view data/file.sorted.bam 1:1-1000 | head`
 
 If you have numerous regions of interest, you can format them as a BED file and pass that to `samtools view`. This can be slow with large BAM files, as it does not does not use the index.
 
@@ -119,8 +119,6 @@ Another useful function built into SAMtools is `samtools stats`, which gives som
 
 `samtools stats ERR1013163.sorted.subset.bam | grep ^SN | cut -f 2-`
 ## Other tricks
-
-### Adding headers back
 
 ### BAM to FASTQ/A
 If you want to extract the sequence info from the reads you can use `samtools fastq` or `samtools fasta`:
