@@ -6,12 +6,21 @@ SAM files are human readable, but can be quite large. An alternate format is the
 
 
 ## SAMtools
-SAMtools is a suite of programs that are extremely useful for processing mapped reads and for downstream analysis. It has a ton of functions (which you can check out on the manual page), but we will go through several of the most common uses.
+[SAMtools](http://www.htslib.org/doc/samtools.html) is a suite of programs that are extremely useful for processing mapped reads and for downstream analysis. It has a ton of functions (which you can check out on the manual page), but we will go through several of the most common uses.
 
 ### General pipeline
-Map reads (BWA, Bowtie, minimap, etc.) --> Filter --> Sort --> Index  
-*Filter*:
+Once you've obtained your mapped reads in BAM/SAM format (from BWA, bowtie, minimap, etc.), there are several steps needed before starting downstream analysis.
 
+*Filter*: generally this means removing unmapped reads from your file, which we will discuss below.
+
+*Sort*: sort the mapped reads by contig/scaffold and by coordinates. This can be done using `samtools sort`:
+
+`samtools sort -o file.sorted.bam file.bam`
+
+*Index*: creates a searchable index of your sorted BAM file, which is required for some programs.
+
+`samtools index file.sorted.bam`
+ ___
 One of the most useful tools for the first processing of mapped reads is `samtools view`, which allows you to view the contents of a BAM/SAM file in SAM format:
 
 `samtools view file.bam | head`
@@ -106,11 +115,23 @@ You might also want to look at per-base coverage rather than the average. For th
 This outputs a three column list, where the 1st column is the contig name, the 2nd is the position, and the 3rd is the depth over that base. This list is convenient for importing to programs like R, where you can plot e.g. a histogram showing the distribution of per-base depth, or distribution of depth over a contig.
 
 ### Stats/flagstats
+Another useful function built into SAMtools is `samtools stats`, which gives some quick summary statistics about your mapping reads. The amount of information it generates is somewhat overkill in most cases, so we will just look at the summary:
 
+`samtools stats ERR1013163.sorted.subset.bam | grep ^SN | cut -f 2-`
 ## Other tricks
 
 ### Adding headers back
 
 ### BAM to FASTQ/A
+If you want to extract the sequence info from the reads you can use `samtools fastq` or `samtools fasta`:
+
+`samtools fastq file.bam | head`
+
+You can also output the pairs to different files.
 
 ### Merge BAM files
+You can combine multiple sorted BAM/SAM files, which can be useful if you have done multiple rounds of mapping:
+
+`samtools merge file.bam file2.bam ...`
+
+Unless otherwise specified, the headers will also be merged.
