@@ -140,7 +140,7 @@ hsps_indices<-ids2indices(hsps,row.names(cpm_filtered_matrix))
 ```
 19. Run Camera with inter-gene correlation estimation for both gene sets
 ```{r,echo=TRUE}
-temp_camera_wcorest_2sets<-camera(vwts$E,c(mapk_indices,hsps_indices),design_2factor,contrast="temperaturehigh",inter.gene.cor=NA)
+temp_camera_wcorest_2sets<-camera(vwts$E,index=list(mapk=mapk_indices$geneid,heatshock=hsps_indices$geneid),design_2factor,contrast="temperaturehigh",inter.gene.cor=NA)
 temp_camera_wcorest_2sets
 ```
 
