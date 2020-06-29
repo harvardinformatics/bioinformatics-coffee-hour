@@ -1,6 +1,162 @@
 ---
-title: 'Enrichment Analysis for Bulk RNA-Seq with Camera and ROAST'
-author: 'Adam Freedman'
-date: 'June 30, 2020'
-output: html_document
+title: 'Enrichment analysis for bulk RNA-seq with Camera and Roast'
+output:
+  html_document: default
 ---
+
+# I. Preliminaries
+This tutorial builds on a workflow presented in our last office hours tutorial on conducting bulk RNA-seq analyses with limma voom. In that tutorial, we analyzed gene-level expression estimates for an experiment looking at parallel climate adaptation in *Drosophila melanogaster*. Today, we introduce methods available in the limma voom R package for conducting enrichment tests, specifically evaluting the extent of DE in a set of features (isoforms or genes), that typically correspond to a pathway of interest. 
+
+These methods have been developed specifically for expression analyses, including RNA-seq, in order to explicitly account for the correlation among expression levels across assayed features, i.e. isoforms or genes. CAMERA performs competitive tests, that compare the extent of DE in a feature set compared to a background set. ROAST performs focused tests on feature sets, to test the hypothesis that there is a significant level of DE observed in features within the set. We will specifically use mROAST that performs multiple single-set tests while adjusting for multiple comparisons.  These methods are more appropriate for RNA-seq experiments than GSEA, because GSEA calculates P-values by permuting sample ids. When there are few samples, as is the case in most bulk RNA-seq experiments, sample permutations lead to elevated false discovery rates.
+
+Specific topics covered today include:
+
+* Quick review of steps for obtaining DE results with limma voom
+* Running CAMERA on limma voom results for MAPK pathway genes involved in stress repsonse and heat shock proteins
+* Running mROAST on limma voom DE results on two gene sets: MAPK pathway genes and heat shock proteins
+
+
+## Sample data
+Our sample data comprises 12 paired-end RNA-seq libraries for whole body samples of *Drosophila melanogaster* from two geographic regions (Panama and Maine), with two temperature treatments ("low" ane "high") for each region, featuring three biological replicates for each region x treatment combination. Previously, these data were used to look for parallel gene expression patterns between high and low latitude populations (Zhao et al, 2015, *PLoS Genetics*)
+
+## Loading required R libraries
+First, load all the R libraries that will be used for today's analyses:
+```{r, echo=TRUE}
+library(edgeR)
+library(limma)
+library(statmod)
+```
+
+## Data management
+1. Load and view the table that associates sample IDs and treatments (dme_elev_samples.tab):
+```{r, echo=TRUE}
+s2c<-read.table("data/dme_elev_samples.tab",header = TRUE, stringsAsFactors=FALSE)
+s2c
+```
+
+2. Open RSEM matrix
+```{r,echo=TRUE}
+rsem_gene_data<-read.table("data/dme_elevgrad_rsem_bt2_gene_counts.matrix.bz2",header=TRUE,row.names=1)
+```
+## Pre-processing and filtering
+### Handling non-integer RSEM estimates
+3. Round the expression matrix
+```{r,echo=TRUE}
+rnaseqMatrix=round(rsem_gene_data)
+```
+### Filtering out lowly expressed genes
+4. Create a boolean variable that classifies samples according to whether CPM>=1:
+```{r,echo=TRUE}
+filter=rowSums(cpm(rnaseqMatrix)>=1)>=6
+```
+5. Apply the filter to the expression matrix:
+```{r,echo=TRUE}
+cpm_filtered_matrix=rnaseqMatrix[filter,]
+```
+
+## Creating a Digital Gene Expression list object 
+To run limma, we need to transform the expression matrix into a DGElist ("digital gene expression list") which is an object class that comes from edgeR
+
+6. Create the DGE object and normalized expression matrix:
+```{r,echo=TRUE}
+DGE<-DGEList(cpm_filtered_matrix)
+```
+## Normalization using TMM method
+
+7. Calculate normalization factors and do MDS plot:
+```{r,echo=TRUE}
+DGE<-calcNormFactors(DGE,method =c("TMM"))
+```
+
+## Analysis of a 2-factor design
+Extending limma to analyze more complex designs is relatively straightforward. A key part is to specify the design matrix properly. For the 2-factor design, one would do this as follows:
+8. Construct the design matrix to incorporate temperate and population effects
+```{r,echo=TRUE}
+population <- factor(s2c$population)
+temperature <- factor(s2c$temp, levels=c("low","high"))
+design_2factor<- model.matrix(~population+temperature)
+design_2factor
+```
+9. Run limma voom with sample quality weights:
+```{r,echo=TRUE}
+vwts <- voomWithQualityWeights(DGE, design=design_2factor,normalize.method="none", plot=TRUE)
+```
+10. Then, run the linear model fitting procedure 1st step:
+```{r,echo=TRUE}
+fit=lmFit(vwts,design_2factor)
+```
+11. Then apply the empirical bayes procedure:
+```{r,echo=TRUE}
+fit=eBayes(fit,robust=TRUE)
+```
+12. Get summary table of all tests, including NS results:
+```{r,echo=TRUE}
+all_genes<-topTable(fit, adjust="BH",coef="temperaturehigh", p.value=1, number=Inf ,resort.by="P")
+```
+II. Running Camera
+
+13. load table of KEGG-classfied MAPK pathway genes
+```{r}
+mapk<-read.table("dme_mapk_ensembl_geneids.txt",header=TRUE)
+head(mapk)
+```
+
+14. create vector of row (gene) indices for the heat shock protein genes:
+```{r,echo=TRUE}
+mapk_indices<-ids2indices(mapk,row.names(cpm_filtered_matrix))
+```
+CameraPR runs camera on precomputed test statistics such at the t-statistics in the limma fit object, so is directly applicable to our limma pipeline.
+
+15. run Camera on the precomputed limma fit object
+It is important to use the correct column of the design matrix. 
+```{r,echo=TRUE}
+colnames(design_2factor)
+```
+As we can see, columnn 3 is for the temperature factor that we are interested in
+```{r,echo=TRUE}
+temp_camera_pr<-cameraPR(fit$t[,3],mapk_indices)
+temp_camera_pr
+```
+
+**Note:** The current default for inter.gene.cor is 0.01, because in the words of the authors, with this value "camera will rank biologically interpetable sets more highly. This gives a useful compromise between strict error rate control and interpretable gene set rankings." This is particularly applicable to relative rankings when one supplies several sets for testing. As it turns out, one can't change this setting in cameraPR. If one wants the rigorous error rate control that results from estimating the inter-gene correlation, and if one isn't worried about relative rankings of different sets, one could call camera, and set inter.gene.cor to NULL, which makes it estimate that correlation. With camera, you need to be careful to specify the relevant expression matrix. The raw input is not necessarily appropriate in this case, as DE testing is done on TMM normalized, quality-weighted data, which we can access via the vmwts object:
+
+16. Run Camera with inter-gene correlation estimation
+```{r,echo=TRUE}
+temp_camera_wcorest<-camera(vwts$E,mapk_indices,design_2factor,contrast="temperaturehigh",inter.gene.cor=NA)
+temp_camera_wcorest
+```
+When camera is asked to do estimation, it returns the estimated correlation in the output. The estimated correlation coefficient is substantially larger than the default used with cameraPR, leading to a more conservative P-value, and a non-significant result.
+
+With either cameraPR, or camera, if you provide multiple gene sets, an FDR value will also be provided.
+
+17. Load the heat shock proteins table
+```{r,echo=TRUE}
+hsps<-read.table("heatshockprotein_ensembl_gene_ids.txt",header=TRUE)
+```
+
+18. Create heat shock protein indices
+```{r,ech=TRUE}
+hsps_indices<-ids2indices(hsps,row.names(cpm_filtered_matrix))
+```
+19. Run Camera with inter-gene correlation estimation for both gene sets
+```{r,echo=TRUE}
+temp_camera_wcorest_2sets<-camera(vwts$E,c(mapk_indices,hsps_indices),design_2factor,contrast="temperaturehigh",inter.gene.cor=NA)
+temp_camera_wcorest_2sets
+```
+
+Our results demonstrate a potential pitfall of using default behavior of an enrichment tool, by assuming a weak correlation among pathway genes!
+
+
+
+**NOTE:** it is entirely possible to run camera on expression data or differential expression test results derived from another pipeline. For example, one could supply an expression matrix derived from kallisto estimates, and a design matrix, and use camera. Perhaps more ideal, to take advantage of the advantages sleuth offers for kallisto-derived estimates, one could supply test statistics obtained from sleuth and run cameraPR.
+
+III. Runnng targeted enrichment analyses with mRoast
+20. Run mRoast on heat shock protein and MAPK pathway gene sets
+```{r,echo=TRUE}
+roast_results<-mroast(vwts$E,index=c(mapk_indices,hsps_indices),design=design_2factor,contrast="temperaturehigh",adjust.method="BH",set.statistic="mean50")
+roast_results
+```
+Roast provides P-values and adjusted P-values (FDR) for the direction with the strongest signal, as well as the significance of the combination of both up and down regulation relative to the factor-level that the coefficient in the design describes, in our case "temperaturehigh". There are a number of arguments one can change, but perhaps the most important is "set.statistic" which defines the summary statistic on which significant testing is performed. The right option depends in part on prior knowledge of the extent of DE in the gene set. "mean.50" performs well under a variety of conditions, representing a balance between power and false discovery and will detect as few as 25% differentially expressed genes. When it is expected that only a small fraction of genes in the set will be differentiall expressed, "msq" is thought to perform better. "Mean" should only be used when a majority of genes are expected to be differentially expressed.For out data set, choosing between these two statistics only has minimal effect on P-values, and resulting test-specific FDR estimates.
+
+In the big picture, Camera competitive tests show there is not significant enrichment of DE signals in the two pathways relative ot overall patterns of DE. However, there are so many differentially expressed genes in this experiment, that this may obscure interesting biology! In contrast, Roast detects DE in both pathways. Perhaps more informative would be an analysis of a larger set of pathway gene sets, and examining how the fractions of DE genes differ amongst pathways to highligth pathways with particularly strong signal.
+
