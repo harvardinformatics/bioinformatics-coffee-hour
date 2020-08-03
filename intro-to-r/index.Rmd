@@ -1,0 +1,7 @@
+---
+title: "Intro to R"
+subtitle: "Bioinformatics Coffee Hour"
+date: "Augus 4, 2020"
+author: "Danielle Khost"
+output: html_document
+---
