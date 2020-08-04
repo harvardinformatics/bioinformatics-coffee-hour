@@ -1,17 +1,21 @@
 ---
 title: "Intro to R"
+subtitle: "Bioinformatics Coffee Hour"
+date: "Augus 4, 2020"
+author: "Danielle Khost"
 output: html_document
 ---
+
 ##Setting up our working directory and saving objects vs files
 
 R is a functional programming language, which means that most of what one does is apply functions to objects.
 
 We will begin with a very brief introduction to R objects and how functions work, and then focus on getting data into R, manipulating that data in R, plotting, and analysis.
 
-First, we need to make sure we are working out of the correct directory. You can see teh working directory above the console in RStudio, or use the `getwd()` function to see the current working directory. If you are not currently working in a good location to read and save files, you can use `setwd()` to change the working directory to the location of your choice.
+First, we need to make sure we are working out of the correct directory. You can see the working directory above the console in RStudio, or use the `getwd()` function to see the current working directory. If you are not currently working in a good location to read and save files, you can use `setwd()` to change the working directory to the location of your choice.
 
 ```{r}
-setwd("~/Dropbox/Workshops/August_2019_Bioinformatics_Shortcourse_Workshops/intro_to_R/")
+getwd()
 ```
 
 
@@ -25,12 +29,6 @@ v1<-c(1,2,3,4,5)
 v1 is an *object* which we created by using the ```<-``` operator (less followed by a dash).
 
 v1 now contains the output of the *function* ```c(1,2,3,4,5)``` (c, for **c**ombined, combines elements into a vector
-
-## ditch this
-Note that ```=``` is essentially the same as ```<-```, but ```<-``` is preferred by the R community primarily for historical reasons.
-```{r}
-v1=c(1,2,3,4,5)
-```
 
 Let's display the contents of v1:
 ```{r}
@@ -101,51 +99,23 @@ v2
 >
 >1. Create a new vector,  (called nums), that contains any 5 numbers you like
 >
->2. Create a new vector, squares, that contains the elements of nums squared (hint: 2^2 = 2 squared)
->
->3. There are a number of functions that operate on vectors, including length(), max(), min(), and mean(), all of which do exactly what they sound like they do. So for example length(nums) should return 5, because nums is a 5-element vector. Use these functions to get the minimum, maximum, and mean value for the nums vector you created. Also try them on the some_letters vector. What happens?
->
->4. Remember that the function ls() returns a vector of the names of the objects you've created in your current R session. Use ls() and length() to determine the number of objects in your R session.
+>2. There are a number of functions that operate on vectors, including length(), max(), min(), and mean(), all of which do exactly what they sound like they do. So for example length(nums) should return 5, because nums is a 5-element vector. Use these functions to get the minimum, maximum, and mean value for the nums vector you created.
 
-Note for this last question, you can solve this either by creating a new object (e.g. ```cur_obj```), or by nesting the functions inside each other.
 
 ```{r}
 #1
 nums <- c(33, 22, 41, 54, 91)
 
 #2
-squares <- nums^2
-squares
-
-#3
 length(nums)
 min(nums)
 max(nums)
 mean(nums)
 
-length(some_letters)
-min(some_letters)
-max(some_letters)
-min(some_letters)
-
-#4
-length(ls())
-cur_obj <- ls()
-length(cur_obj)
 ```
 
-We can also remove objects from our workspace using the function ```rm```.
-?rm
-```{r}
-ls()
-rm(x)
-ls()
-```
 
-We might want to do this if we are working with large object that takes up a lot of memory, and we no longer need that object.
-
-
-## Object Types...maybe skip
+## Object Types
 
 All objects have a type. Object types are a complex topic and we are only going to scratch the surface today. To slightly simplify, all data objects in R are either atomic vectors (contain only a single type of data), or data structures that combine atomic vectors in various ways. We'll walk through a few examples. First, let's consider a couple of the vectors that we've already made.
 
@@ -170,47 +140,27 @@ logic2
 
 Note that the logical test here (>2) is applied independently to each element in the vector. We'll come back to this when we talk about data subsets.
 
-A final thing to note about logical vectors: they can be converted to numeric with TRUE=1 and FALSE=0. So a simple way to find how many elements in a logical vector are true is sum(). Using mean() is an easy way to get the proportion of true elements in a vector.
+> **Object type exercises:**
+>
+>1. Construct a logical vector with the same number of elements as your nums vector, that is TRUE if the corresponding element in the nums vector is less than the mean of the nums vector, and FALSE otherwise. Call this vector big_nums
+
 
 ```{r}
-sum(logic2)
-mean(logic2)
-```
 
-> **Object type exercises:** SKIP
->
->1. Use class() to determine the type of vector that the ls() function returns. How about the max function? Does it change depending on the input?
->
->2. Construct a logical vector with the same number of elements as your nums vector, that is TRUE if the corresponding element in the nums vector is less than the mean of the nums vector, and FALSE otherwise. Call this vector big_nums
->
->3. How many elements in your nums vector are greater than the mean of the nums vector?
->
-
-```{r}
 #1
-class(ls())
-class(max(nums))
-class(max(some_letters))
-
-#2
 big_nums <- nums>mean(nums)
 
-#3
-sum(big_nums)
 ```
 
 
-## Subsetting and Logical Vectors JUST NUMERICAL INDICES
+## Subsetting and Logical Vectors
 
 We can also extract portions of vectors that we've created using ```[]``` following the vector, with the positions we wish to extract. For example, we can extract portions of the nums vector:
 
 ```{r}
 nums[1]
-nums[5]
-nums[6]
 nums[1:5]
 nums[c(1,4,5)]
-nums[c(5,5,5,5)]
 ```
 
 Now it can be useful to specify which positions you would like to include, but often it is more useful to create new objects based on some sort of rule. That is where logical vectors come in, and really how you will mostly be using logical vectors going forward.
@@ -238,11 +188,7 @@ nums[nums>mean(nums)]
 
 > **Vector Subsetting Data exercises:**
 >
-> 1. Create a logical vector that is true for all values of nums that are larger than the minimum.
->
-> 2. Subset nums for all numbers that are larger than the minimum.
->
-> 3. Subset nums for all values that are not equal to the maximum of nums.
+> 1. Subset nums for all numbers that are larger than the minimum.
 >
 > Hints -- logical tests in R - greater than, less than, equal to, not equal to
 >
@@ -250,13 +196,7 @@ nums[nums>mean(nums)]
 
 ```{r}
 #1
-nums2 <- nums>min(nums)
-
-#2
-nums[nums2]
-
-#3
-nums[nums != max(nums)]
+nums[nums>min(nums)]
 ```
 
 
@@ -269,7 +209,7 @@ So far we've been talking about atomic vectors, which only contain a single data
 1-D            | atomic vector   | list
 2-D            | matrix          | data frame / tibble
 
-We'll focus on data frames and tibbles for today, but lists and matrices can also be very powerful. A data frame is a collection of vectors, which can be (but don't have to be) different types, but all have to have the same length. Let's make a couple of toy data frames.
+We'll focus on data frames for today, but lists and matrices can also be very powerful. A data frame is a collection of vectors, which can be (but don't have to be) different types, but all have to have the same length. Let's make a couple of toy data frames.
 
 One way to do this is with the data.frame() function.
 
@@ -283,15 +223,12 @@ str() gives lots of information about the data type of the consituent parts of a
 ```{r}
 str(df1)
 ```
-## Skip factors!
-Note that label is a *factor* -- this is a special kind of character vector to represent categorical data. By default, when creating a data frame or reading data from a file, R will convert strings (character vectors) to factors. Factors can be useful, but also introduce some pitfalls, which we can come back to if we have time. A good source of information on factors is [here](http://swcarpentry.github.io/r-novice-inflammation/12-supp-factors/).
 
 We can use the function head() to look at part of a a dataframe (or any R object). This can be very useful if you have a very large or long dataframe. You also can control how many lines of the dataframe you view with ```n=#```, although the default is 6.
 
 ```{r}
 head(df1)
 head(df1, n=2)
-head(df1, n=10)
 ```
 
 The summary() function can also be very useful to get a snapshot of the data in your dataframe.
@@ -307,32 +244,19 @@ summary(df1)
 So far we have been working with small objects we created by hand. A more common way to create dataframes is by reading from a file. There are a few functions to do this in R: read.table() and read.csv() make this easy.
 
 ```{r}
-bus<-read.table(file="http://software.rc.fas.harvard.edu/ngsdata/workshops/2015_March/mbta_bus.tsv", sep="\t", header=TRUE)
+bus<-read.table(file="/home/rstudio/data/mbta_bus.tsv", sep="\t", header=TRUE)
 ```
-
-Note that R can read data directly from the web -- no need to download the file first.
 
 
 > **File reading exercise**
 >
->1. Explore the bus data frame and see what it contains
->
->2. Try using head() to see the first 20 rows and summary() to see some information about the data.
->
->3. What happens when you use the function View() with the bus object?
+>1. Try using head() to see the first 20 rows and summary() to see some information about the data.
+
 
 ```{r}
-#1
-#bus
-
 #2
 head(bus, n=20)
-
-#3
-View(bus)
 ```
-
-head() can be used to increase the number of rows shown when looking at an R object. Let's also look at str()
 
 Again, summary() is a good way to see some basic information about a dataframe
 
@@ -353,12 +277,9 @@ We learned about how to subset vectors earlier, now let's look at ways to get su
 ```{r, eval=FALSE}
 bus[1,1]
 bus[1,]
-bus[15,2]
 bus[1:5,]
 bus[1:5,4]
 bus[c(1,3,5),c(2,3)]
-head(bus[,1])
-bus[1:6,1]
 ```
 
 The first number refers to rows, and the second to columns in the case for 2-dimensional objects.
@@ -376,12 +297,14 @@ Often we want to select a set of rows from a data frame matching some criteria. 
 
 ```{r}
 key.bus<-subset(bus,type=="Key")
+View(key.bus)
 ```
 
 Sometimes we might want something more complicated. Let's say we want to get data for all "local" bus routes with at least 1000 daily riders.
 
 ```{r}
 local.bus<-subset(bus, type=="Local" & ridership > 1000)
+View(local.bus)
 ```
 
 > **Subsetting Data exercises:**
@@ -421,7 +344,7 @@ We've added several variables now, and we might want to write our updated datase
 write.table(bus, file="mbta_bus_data.tsv", quote=F, sep="\t", row.names=F, col.names=T)
 ```
 
-But where did R put the file on our computer? R does all file operations without a full path in a working directory. RStudio has a preference to set the default working directory, which is typically something like /Users/Allison/R.
+But where did R put the file on our computer? R does all file operations without a full path in a working directory. RStudio has a preference to set the default working directory, which is typically something like /Users/Danielle/R.
 
 To see the current working directory, use:
 ```{r}
@@ -430,23 +353,10 @@ getwd()
 
 We can change the working directory with ```setwd()```.
 
-Note that you can also save R data objects directly in an R data file (.Rdat). This can come in handy if you have a number of R objects that took a long time to compute, and you want to work on them later. This can also be useful if you are working with R objects that can't easily be saved as a tab-delimited file.
-
-```{r}
-save(bus,bus_2500_notKey,file="bus_objects.Rdat")
-rm(bus)
-rm(bus_2500_notKey)
-```
-
-Later, when you load the file, those objects will automatically be added to your environment.
-```{r}
-load("bus_objects.Rdat")
-```
-
 
 >**File operators exercises:**
 >
->1. Write a copy of bus_2500_notKey to your hard drive, but **be sure to give it a different name than the original!** Otherwise you will overwrite your original data.
+>1. Write a copy of bus_2500_notKey, but **be sure to give it a different name than the original!** Otherwise you will overwrite your original data.
 >
 
 ```{r}
