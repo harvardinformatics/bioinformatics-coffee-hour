@@ -1,0 +1,349 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Let's quickly reload the two data sets we used last time and clean them up. Last time we converted the mask use data from wide format into long format, but let's keep it in wide format for now
+```{r, include=FALSE}
+# load mask data
+mask_use <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/bde13b021e99c6b4a63fb66a6144e889cc635e31/mask-use/mask-use-by-county.csv", delim=",")
+mask_use_long <- mask_use %>%
+  pivot_longer(cols = -COUNTYFP, names_to = "MaskUseResponse", values_to = "MaskUseProportion") %>%
+  rename(COUNTYFP = "fips") %>%
+  arrange(fips)
+
+# load case count data, filter based on most recent date
+cases <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/ccc8c7988a089fed287a9005e5335d8716d8db57/us-counties.csv", delim=",")
+cases_latest <- cases %>% filter(date == "2020-08-03") %>%
+  dplyr::select(-date) %>%
+  arrange(fips)
+```
+
+
+
+We will now load in some additional data on population size by county, which I obtained from www.census.gov.
+```{r, include=FALSE}
+pop_sizes <- read_delim(file="co-est2019-annres.csv.xz", delim=",")
+```
+
+Let's take several peeks at these data. If we are working with a small data set, we may be able to look at the entire table by eye to make sure it looks as we want. But, as you work with larger data sets, this approach becomes less feasible, and it's good to get into the practice of knowing how you can get an idea of what your data look like without inspecting every row or column. Let's pretend our data are simply too numerous to look at. So we can't see them by eye, but we can shine a flashlight on particular corners of these data to get a sense of whether they largely look like we'd expect. These are just a few commands I might use to do this:
+```{r}
+head(pop_sizes) 
+nrow(pop_sizes) 
+sum(!is.na(pop_sizes$'2019')) # how many counties have size estimates for 2019? it's even closer to the 3142 we expect!
+tail(pop_sizes)
+```
+
+From these commands, we can see that the entire US was included in this table, which is not a county. We should remove that. Also, county names are all preceded with a ".", something we'll deal with in a moment. The number of rows in the table is very similar to what we expect (3,142 according to wikipedia), but maybe larger by 7 rows or so. The row containing the entire US contributes to this excess of rows beyond our expectation. 
+
+Looking at the number of estimates for 2019, they're extemely close to what we expect! 
+
+Looking at the bottom of the table, we see some footnotes were left in! These are probably contributing to the extra number of rows and should absolutely be removed!
+
+Let's remove these rows with the slice() function (unlike the select() function that removes columns).
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>% dplyr::slice(2:3143) # this also gets rid of the notes at the bottom
+```
+
+The 'Geographic Area' column has two pieces of info in it: county and state. We should split this column into two columns so that we can separately access the info. For instance, later on we will do an analysis not by county but by state, and this requires having this information in it's own seperate column. To separate this info into 2 seperate columns, we will use the separate() function:
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>% separate(col = 'Geographic Area',
+                                    into = c("County", "State"),
+                                    sep = ", ")
+```
+And just so you know, there's a related function called unite() that does just the opposite: combining columns into a single column.
+
+Let's get rid of extra characters in the new 'County' column. We don't need the "." that precedes each name, and it's pointless that each individual county name is followed by "County"... we know they're counties based on the name of the column. We can use the mutate() function to add new rows with new names, but if the name of the new row we want is the same as an existing one, it just replaces it!
+
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>% 
+  mutate(County = str_remove(string = County,pattern = ".")) %>%
+  mutate(County = str_remove(string = County,pattern = " County"))
+```
+
+This table includes population size dat for quite a few years. Let's just get the most recent population estimate, selecting the 2019 column with the select() function:
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>%
+  dplyr::select(County, State, "2019")
+```
+
+We can also combine all of these individual commands into one compact command to share with our collaborators:
+```{r, include=FALSE}
+pop_sizes <- read_delim(file="co-est2019-annres.csv.xz", delim=",")
+pop_sizes <- pop_sizes %>% 
+  dplyr::slice(2:3143) %>%
+  separate(col = 'Geographic Area', into = c("County", "State"), sep = ", ") %>%
+  mutate(County = str_remove(string = County,pattern = ".")) %>%
+  mutate(County = str_remove(string = County,pattern = " County")) %>%
+  dplyr::select(County, State, "2019")
+```
+
+We can take a quick peek at these population size data, now that they're cleaned, using the summary() function, which shows there's a ton of variability in county sizes!
+```{r}
+summary(pop_sizes$'2019')
+```
+
+
+Let's combine these data on population sizes with our previous data on case counts and mask usage, as it may reveal interesting trends. For instance, what fraction of a county's population is testing positive? 
+
+We will first use the join command on the case data and population data, joining by BOTH county and state. Why can't we just join by county?
+```{r, include=FALSE}
+cases_popsize <- inner_join(x=cases_latest, y=pop_sizes, 
+                                  by=c("county"="County", "state"="State"))
+```
+
+
+Using this table with case counts and population size, let's add in the mask data. For now, let's not add in all the mask data. Let's only incorporate the the proportion of people who are "ALWAYS" masked for each county
+```{r, include=FALSE}
+cases_popsize_masked <- inner_join(x=cases_popsize, 
+                            y=dplyr::select(mask_use, c(COUNTYFP, ALWAYS)),
+                            by=c("fips" = "COUNTYFP"))
+```
+
+Looking at this data table, for each county we now have cases, deaths, population size, and the proportion of people who are always masked.
+
+You may also notice the population size data had a column entitled "2019" for size estimates during that year. Let's make this more informative and change it to "pop_size", and rename the ALWAYS column so that we know it's referring to always masked.
+```{r, include=FALSE}
+cases_popsize_masked <- cases_popsize_masked %>%
+  rename("2019" = "pop_size", ALWAYS="AlwaysMasked")
+```
+
+Let's quickly probe these data just to get an idea of what they look like. The main goal here is to teach you how to use R/tidyverse commands to quickly and easily make observations about your data. Let's make these observations and keep them descriptive; we will not infer any trends or try to draw conclusions because doing so requires techniques that are a little too complicated for this short workshop. Also, the topic of these data were meant to get you engaged, but please don't think you're suddenly a public health official because we've loaded some data into R.
+
+
+Do counties with large populations have a higher proportion of cases? Let's use a simple plotting function to plot population size on the x axis and proportion of cases on y axis. Since we will look at the proportion of cases by dividing the data in the case counts column by the data in the population size column, let's just make a new column called 'PropCases' that contains this information
+```{r}
+cases_popsize_masked <- cases_popsize_masked %>%
+  mutate(PropCases = cases/pop_size)
+```
+
+
+```{r}
+# CANT DO CORRELATIONS WITH HETEROSCEDASTICITY
+plot(x=cases_popsize_masked$pop_size,
+     y=cases_popsize_masked$PropCases,
+     log="x",
+     ylab="Proportion of cases",
+     xlab="pop size")
+```
+Looks interesting. Counties with larger population sizes may look like they have higher proportion of cases, but it's a little complicated because there's a lot of variability for counties with smaller population sizes. 
+
+One thing that might catch our eye are those outliers with very high rates of positive cases? What counties are theses, and in what states? We can very easily check this with the following:
+```{r}
+cases_popsize_masked %>%
+  filter(PropCases > 0.08) %>%
+  arrange(desc(PropCases))
+```
+
+
+Let's add another column for death rate
+```{r}
+cases_popsize_masked <- cases_popsize_masked %>%
+  mutate(PropDeaths = deaths/cases)
+```
+
+And quickly plot the death rate
+```{r}
+plot(x=cases_popsize_masked$PropCases,
+     y=cases_popsize_masked$PropDeaths,
+     log="",
+     xlab="PropCases",
+     ylab="PropDeaths")
+
+```
+
+What are these counties that have been severely impacted by deaths? Is this something to be concerned about, or is this just noise from counties with small sizes and/or small case counts?
+
+```{r}
+cases_popsize_masked %>%
+  filter(PropDeaths > 0.15) %>%
+  arrange(desc(PropDeaths))
+```
+
+
+
+# group_by() and summarize() functions are extremely easy and powerful
+
+The use of the group_by() and summarize() functions allows us to do quickly get extremely informative information from our data. I would like to use these two functions to now show the importance of changing your data from long format to wide format.
+
+Let's go back to our original mask use data table, not the combined one. What if we wanted to quickly get the overall mean values of ALWAYS, ... , NEVER across all the counties? We could use the original data in wide format, and calculate the mean for each of these columns:
+```{r}
+mean(mask_use$NEVER)
+mean(mask_use$RARELY)
+mean(mask_use$SOMETIMES)
+mean(mask_use$FREQUENTLY)
+mean(mask_use$ALWAYS)
+```
+
+There's nothing wrong with doing it this way, but it's not very elegant and would get more difficult if our data were more complicated.
+
+Another way of calculating these values is to convert our mask data into long format where these mask-wearing frequency categories (NEVER, ... , ALWAYS) are different values of a categorical variable (MaskUseResponse), and we tell R that we want to do an analysis separately for each of these different categorical variable values, where here this analysis is just calculating the mean. In other words, for all the rows with values of NEVER for MaskUseResponse, calculate a mean separately, and repeat for all the other possible MaskUseResponse values. We tell R to treat these different categorical variable values separately using group_by(), and the summarize() function can then use these groupings to perform analyses, here calculating the mean.
+
+
+```{r}
+mask_use_long %>% 
+  group_by(MaskUseResponse) %>% 
+  summarize(mean(MaskUseProportion))
+```
+
+
+Going back to our combined data...
+
+Instead of focusing on counties as our unit of analysis, we can easily switch to a state level analysis. The function group_by() can take a column that contains a categorical variable (e.g. "state"), and use these data to do analyses by the values of this categorical variable. When we combine the group_by() function with summarize(), we can easily do some pretty powerful analyses that would take a lot of effort using other programs.
+```{r}
+cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(MeanMasked = mean(AlwaysMasked)) %>%
+  arrange(desc(MeanMasked))
+```
+
+
+Note that this creates a new tibble, and that a new column is created called "MeanMasked" that calculates the mean as a function of whatever variable was put into group_by(). So what is happening here is because we gave "state" to group_by(), R goes through all the rows of AlwaysMasked and if they have the same value for "state", from different counties from the same state, it uses all that data for the state to calculate a mean. If this isn't clear, I will explain it more in one moment.
+
+I'd first like to point out that this is potentially a bad analysis because we are calculating a mean for a state based on it's counties, and some of these counties may be represented by fewer people. So if we truly wanted the average behavior of a state, we should weight each county by its population size. Why should a county with a size of 400 contribute equally to the mean as a county of size 40,000?
+
+See the element-wise vector math figure provided in the github repository for a graphical explanation of what's being done here:
+```{r}
+cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(WeightedMeanMasked = sum(AlwaysMasked*pop_size)/sum(pop_size)) %>%
+  arrange(desc(WeightedMeanMasked))
+```
+
+
+
+Did this weighting by county size actually make a difference? Let's store these analyses as 'x' and 'y' and compare them:
+```{r}
+x <- cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(MeanMasked = mean(AlwaysMasked)) %>%
+  arrange(state)
+
+y <- cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(WeightedMeanMasked = sum(AlwaysMasked*pop_size)/sum(pop_size)) %>%
+  arrange(state)
+
+hist(x$MeanMasked - y$WeightedMeanMasked)
+```
+
+It looks like on average, AlwaysMasked estimates that don't take pop_size into account are systematically lower than those that do. When we don't take county size into account, we effectively give more weight to smaller counties. Thus, if by doing this we produce lower estimates of AlwaysMasked by state, this suggests that smaller counties in general have lower values for AlwaysMasked. Is this true?
+
+```{r}
+
+plot(x=cases_popsize_masked$pop_size,
+     y=cases_popsize_masked$AlwaysMasked,
+     log="x")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+How does mask wearing behavior change with the proportion of positive cases? Just a reminder, we can't infer causality here, not even correlations given the data distributions. For instance, positive cases could be associated with mask wearing if the policy started too late, or negatively associated if mask wearing started very early for some counties. Constructing stories just from correlations is almost guaranteed to get you into trouble without more experiments that directly test cause and effect, which have been done and show masks prevent transmission.
+
+```{r}
+plot(x=cases_popsize_masked$AlwaysMasked,
+     y=cases_popsize_masked$PropCases,
+     log="y")
+cases_popsize_masked %>%
+  with(bptest(AlwaysMasked ~ cases/pop_size))
+
+# NOT WITH HETEROSCEDASTICITY
+#cor.test(cases_popsize_masked$AlwaysMasked,
+#     cases_popsize_masked$cases/cases_popsize_masked$pop_size)
+#cor(cases_popsize_masked$pop_size,
+#     cases_popsize_masked$AlwaysMasked)
+```
+
+
+
+
+
+
+What are these counties with such high death rates?
+```{r}
+cases_masks_popsize %>%
+  filter(cases > 10000, PropDeaths > 0.07) %>%
+  arrange(desc(pop_size))
+```
+
+These death rates depend completely on the denominator, and if testing capacity is reduced, this could inflate death rates. This is a testable hypothesis that outlines what additional data to collect (or how to analyze our existing data in a different way). Always think critically about your data and question whether or not you actually believe them, making additional hypotheses that could support or refute your original hunches.
+
+# Have example where you look for counties with highest death rates or proportion of cases, or something that may be affected by sample size, then show in a plot how pervasive of an effect this is, provide small schools example from TFAS
+# Show this may also affect mask usage?
+# Do analysis by state, or filter out sparesely populated counties
+# each county was measured by it's census tracts, and larger counties have more census tracts (which are typically constrained to be around 4k ppl according to wikipedia) and thus more data
+
+
+
+death rate by pop size
+
+
+
+hist(cases_masks_popsize$SOMETIMES)
+hist(cases_masks_popsize$pop_size, breaks=500, xlim=c(0,1000000))
+
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$cases)
+cor(cases_masks_popsize$pop_size, cases_masks_popsize$cases)
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$deaths)
+cor(cases_masks_popsize$pop_size, cases_masks_popsize$deaths)
+
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$cases/cases_masks_popsize$pop_size)
+cor(cases_masks_popsize$pop_size, cases_masks_popsize$cases/cases_masks_popsize$pop_size)
+
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$deaths/cases_masks_popsize$cases)
+cor(cases_masks_popsize$pop_size, cases_masks_popsize$deaths/cases_masks_popsize$cases)
+
+
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$cases,
+    ylim=c(0,5000),
+    xlim=c(0,2000000))
+
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$cases/cases_masks_popsize$pop_size,
+    ylim=c(0,0.2),
+    xlim=c(0,2000000))
+
+plot(x=cases_masks_popsize$cases,
+    y=cases_masks_popsize$ALWAYS)
+plot(x=cases_masks_popsize$cases/cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$ALWAYS)
+cor.test(cases_masks_popsize$cases/cases_masks_popsize$pop_size,
+    cases_masks_popsize$NEVER)
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$ALWAYS,
+    ylim=c(0,1),
+    xlim=c(0,1000000))
+
+
+plot(x=cases_masks_popsize$pop_size,
+    y=cases_masks_popsize$deaths/cases_masks_popsize$cases)
+
+cases_masks_popsize %>% filter(county == "Butler")
+cases_masks_popsize_1 %>% filter(county == "Butler")
+#pop_sizes2 %>% dplyr::select(State)
