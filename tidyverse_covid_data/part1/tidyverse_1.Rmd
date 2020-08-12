@@ -1,0 +1,208 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("./")
+```
+
+The previous workshop gave a basic introduction to data structures in R. Today we will talk about the 'tidyverse' package, which is a collection of packages that contain many useful functions with intuitive names that are used to clean and process data sets. You don't need to use the tidyverse paclages to necessarily analyze your data in R, but it has rapidly become the industry standard.
+
+Tidyverse has many functions, especially when you see them all in a [cheat sheet](https://rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf). Don't worry about necessarily memorizing them all. We'll go through several of the more important ones, and as you analyze data yourselves, you can quickly find what functions may be useful based on how they're categorized here. Alternatively, google searches that include 'tidyverse' in the search may also be fast and informative. 
+
+The Tidyverse package is already installed in this environment we're working in, but when you use R studio on your own computers, you'll need to install these libraries (if they aren't already installed), and then load them using the install.packages() and library() functions, respectivey:
+```{r}
+#install.packages("tidyverse")
+library(tidyverse)
+```
+
+Many of the tidyverse functions operate on a data table. At the end of the previous workshop, we introduced the 'data frame', which is essentially a table with rows and columns, and the columns have informative names. When we use the functions within tidyverse, we will instead use a 'tibble', which is a table that is very similar to a data frame but has a few differences that I won't discuss in detail. Just know that when you see the word "tibble", that's basically a data table.
+
+For these next two workshops on tidyverse, we will grab data from different sources. Downloading, cleaning, and combining a data sets are very common tasks for all sorts of scientists, and these skills will be valuable for you regardless of what kind of data you want to analyze.
+
+Let's load in the first data set on mask usage in the US, recently provided by the New York Times. Let's take a peek at the raw file to get an idea of what it looks like using the head command on terminal. As you can see, it looks like a bunch of information separated by commas. Let's read in these data with the read_delim() function and let R know that our data are separated, or delimited, by commas.
+```{r}
+mask_use <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/bde13b021e99c6b4a63fb66a6144e889cc635e31/mask-use/mask-use-by-county.csv", delim=",")
+mask_use
+```
+
+From the NYT github repo re. these data, they asked the question: "How often do you wear a mask in public when you expect to be within six feet of another person?"
+
+It looks like for all the counties are represented with a 5-digit FIPS code, which is not exactly ideal because we don't know what these numbers mean. We'll get the names in a moment by combining these data with another file that also has these FIPS codes AND county names. We can thus match these data tables based on shared FIPS codes to combine them.
+
+When I download other peoples data, I typically like to do many sanity checks on them to make sure they make sense. Even if you trust your source, it's always good to verify. One question that immediately came to my mind is whether these values sum to 1 for each row, as it seems like they should. We can quick check this for a few rows using the bracket notation to access particular parts of the table
+```{r}
+sum(mask_use[1,2:6])
+sum(mask_use[2,2:6])
+sum(mask_use[3,2:6])
+```
+
+# Data tables: wide format vs long format
+
+Oftentimes, it is ideal to make our data "tidy". Tidy data is data where:
+
+1. Every column is variable.
+2. Every row is an observation.
+3. Every cell is a single value.
+
+When we look at this mask use data, is each column it's own variable? It doesn't seem like it. The most basic unit of analysis here is a person within a county. This person was asked a question, and they replied with one of five responses. So, we could define a single categorical variable "MaskUseResponse" that takes on one of these five values measuring approximate frequency. This could be a new column, entitled "MaskUseResponse", and in the rows beneath would be one of these five responses. Then, we could have another column that, for each of these responses, has the value of how many people wore masks that frequently. Here we are gathering the data across five columns into two columns. This used to be done with a function called gather(), which you may encounter frequently, but we'll use its newer version: pivot_longer(). (SEE CHEAT SHEET!)
+
+Also, see [here](https://en.wikipedia.org/wiki/Wide_and_narrow_data) for another simple example wide vs long format.
+
+```{r}
+mask_use_long <- pivot_longer(data = mask_use, 
+                              cols = -COUNTYFP, 
+                              names_to = "MaskUseResponse", 
+                              values_to = "MaskUseProportion")
+```
+
+As you can see, the tibble is much longer and each county is represented by 5 rows, once for each value of the MaskUseResponse categorical variable. If we wanted to go from this long format back to wide format, we could use the spread() function, or its newer version pivot_wider(), to spread out these two columns into the 5 original columns, but we will not do this today.
+
+I'd also like to note that long format is not more correct or better than wide format. It completely depends on what analyses you're doing and both may be acceptable. If you load in your data set, you don't NEED to convert it to long format, but in the next workshop session I'll show you how converting to long format can potentially allow you to do some powerful stuff.
+
+
+Let's say right after we convert these data to long format, we want to polish it by renaming one of the columns, "COUNTYFP", to "fips", and arrange the table such that it is sorted by this column. To do this, we will use the rename() and arrange() functions, respectively. In R, we can easily do multiple operations in a row, but like all problems in coding, there are multiple, technically correct ways of doing something:
+```{r, include=FALSE}
+# do each operation on a separate line
+mask_use_long <- pivot_longer(data = mask_use, cols = -COUNTYFP, names_to = "MaskUseResponse", values_to = "MaskUseProportion")
+mask_use_long <- rename(mask_use_long, "fips" = COUNTYFP)
+mask_use_long <- arrange(mask_use_long, "fips")
+
+# most dense: do all operations on a single line
+mask_use_long <- pivot_longer(data = arrange(rename(mask_use, "fips" = COUNTYFP), "fips"), cols = -"fips", names_to = "MaskUseResponse", values_to = "MaskUseProportion")
+```
+
+When we want to do multiple operations in a row, it is generally considered better to string together multiple commands using the pipe operator in tidyverse, which is specified by %>%. This piping together of commands allows us to do many complicated things while keeping our code very easy to read.
+```{r, include=FALSE}
+mask_use_long <- mask_use %>%
+  pivot_longer(cols = -COUNTYFP, names_to = "MaskUseResponse", values_to = "MaskUseProportion") %>%
+  rename("fips" = COUNTYFP) %>%
+  arrange(fips)
+```
+
+In addition to the mask data, let's also load in data on covid19 case counts across the US, also supplied by the NYT, and combine it with our mask use data. Unlike the previous data that we loaded in from our local file system, these data we will directly download because they are so large. This will also show how you can specify web addresses instead of file names for read_delim(). This file is also comma separated, so we will let read_delim() know this.
+```{r, include=FALSE}
+cases <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/ccc8c7988a089fed287a9005e5335d8716d8db57/us-counties.csv", delim=",") %>%
+  arrange(fips)
+```
+
+This is a lot of data. For some 3 thousand counties, there's an estimate of cumulative covid19 cases and deaths for each day since late January (it's now early August). For now, let's just look at the most recent date: 2020-08-03 in the date column. We can use the filter() function to filter our data table by row
+```{r, include=FALSE}
+cases_latest <- cases %>% 
+  filter(date == "2020-08-03") %>%
+  arrange(fips)
+```
+
+You'll notice that these data have both a county name and a county FIPS number, whereas the mask data only had an FIPS number. We can combine these two tables in order to get an actual county name and state for the mask data. 
+
+There are several flavors of join functions (type ?join) that combine data sets based on values in a column. Here, we want to match 2 tables, 'cases_latest' and 'mask_use_long', based on FIPS number, such that rows in either table that have a matching FIPS number are combined. Which join function we choose depends on how we want to deal with missing data. 
+
+For instance, what if one table doesn't have an FIPS code? If we use inner_join(), we are more conservative and the joined/combined table doesn't include any rows where either 'cases_latest' OR 'mask_use_long' had missing data. If we use left_join(), we include all the rows in the 'left' table (specified as x), and if there isn't a FIPS code in the 'right' table (specified as y), then we just fill in the gaps with NAs as needed. The other join functions follow a similar logic and you can see them in the help page.
+
+Since the outcome of using a join function depends on missing data, let's take a quick peek at how complete our data are.
+```{r}
+cases_latest %>% filter(is.na(fips)) %>%
+  nrow
+mask_use_long %>% filter(is.na(fips)) %>%
+  nrow
+```
+
+Ok so it looks like there are 29 rows in the case count data that don't have FIPS codes... do we care about them? Let's take a peek:
+```{r}
+cases_NAs <- cases_latest %>% 
+  filter(is.na(fips)) %>%
+  arrange()
+```
+
+Oof, the FIPS number for New York City, perhaps one of the most important counties given the context, is missing in the case count data, yet it appears to be present in the mask use data (using a FIPS code of 36061 for Manhattan). In cases like this, we can modify the 'fips' column in the case count data to include the number 36061. Specifically, we can use the mutate() function, which allows us to change columns, and supply it with an if_else() function so that it ONLY changes values in the fips column (from NA to 36061) if the value for county in the same row is "New York City":
+
+```{r}
+cases_latest <- cases_latest %>%
+    mutate(fips = if_else(county == "New York City", true = "36061", false = fips))
+```
+
+Now that we've modified our data table to incorporate New York City, let's use inner_join() so that we know each county has BOTH case counts and mask data.
+```{r, include=FALSE}
+cases_masks <- inner_join(x=cases_latest, y=mask_use_long, by="fips")
+```
+
+Another thing you will notice is that there are only one cases and deaths value for each county, but these get replicated 5 times because we have 5 mask use responses for each county. This kind of looks awkward, but it's not necessarily bad to have it this way as long as we analyze our data appropriately and take this into account as we do below. Again, depending on the analysis, we could also just keep these data in wide format so that the data don't get duplicated.
+
+Since these data are all from the same date, we don't need this column anymore as it's not informative. Also, we can get rid of the county FIPS code column since we only used that information to combine the cases data and the mask data. Now that we've done that, we don't need that information either
+
+```{r, include=FALSE}
+cases_masks <- cases_masks %>% dplyr::select(-date, -fips)
+```
+
+Let's use some basic tidyverse functions to superficially explore these data, just scratching the surface.
+
+Which counties use masks most frequently?
+```{r}
+cases_masks %>% filter(MaskUseResponse == "ALWAYS") %>%
+  arrange(desc(MaskUseProportion), county) %>%
+  head(n=20)
+```
+
+Which counties use masks least frequently?
+```{r}
+cases_masks %>% filter(MaskUseResponse == "NEVER") %>%
+  arrange(desc(MaskUseProportion), county) %>%
+  head(n=10)
+```
+
+For the counties with the most cases, how frequently are people ALWAYS wearing masks?
+```{r}
+cases_masks %>% filter(MaskUseResponse == "ALWAYS") %>%
+  arrange(desc(cases), county) %>%
+  head(n=10)
+```
+
+# Summary
+Key tidyverse functions used today:
+- read_delim() to read files in and convert them to a tibble, a special kind of data table
+- pivot_longer()/pivot_wider() to convert data between long and wide format
+- rename() to change the names of particular columns
+- arrange() to sort the tibble according to values in particular columns
+- filter() to select particular rows that meet specific conditions
+- mutate(), with if_else() to modify particular cells in a table!
+ - select() to select specific columns to keep
+
+This is just taking quick peeks at these data. In the next session, we'll review and learn some more tidyverse tools to manipulate data, but we'll also learn some easy-to-use functions that allow us to analyze these data in more complex ways, using relatively little code!
+
+
+
+
+
+
+
+
+
+
+END OF WORKSHOP, PERSONAL NOTES:
+
+What is mask use behavior like in places with many cases? Let's first quickly peek at the distributions for cases and mask-wearing
+```{r}
+cases_masks %>% 
+  ggplot(aes(cases)) + geom_histogram()
+cases_masks %>% filter(MaskUseResponse == "ALWAYS") %>% 
+  ggplot(aes(MaskUseProportion)) +
+  geom_histogram()
+```
+
+```{r}
+mask_wearers <- cases_masks %>% filter(MaskUseResponse == "ALWAYS") %>%
+  arrange(desc(MaskUseProportion), county) %>%
+  head(n=50)
+mean(mask_wearers$cases)
+live_free_or_die <- cases_masks %>% filter(MaskUseResponse == "NEVER") %>%
+  arrange(desc(MaskUseProportion), county) %>%
+  head(n=50)
+mean(live_free_or_die$cases)
+```
+
+
