@@ -7,13 +7,15 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
-setwd("/Users/bjarnold/DivInformatics/Workshops/Summer2020_shortRtutorials")
-```
 
 This is the second session covering tidyverse commands. We will show you how to use some new functions, but we will also use some of the functions we previously used last week which will be good for extra practice. If you missed the previous session, that should not be a problem.
 
 From last time, we looked at this [cheat sheet](https://rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf) to occasionally guide us.
+
+It's typical to load all the libraries you need at the top of your code.
+```{r}
+library(tidyverse)
+```
 
 Let's quickly reload the two data sets we used last time and clean them up. As a reminder, we converted the mask use data from wide format into long format, but let's keep the data in both versions today.
 ```{r, include=FALSE}
@@ -35,7 +37,7 @@ These data from last time are all at the county level, which vary considerably b
 
 Let's load in some additional data on population size by county, which I obtained from www.census.gov.
 ```{r, include=FALSE}
-pop_sizes <- read_delim(file="co-est2019-annres.csv", delim=",")
+pop_sizes <- read_delim(file="co-est2019-annres.csv.xz", delim=",")
 ```
 
 When I'm working with larger files and I want to make sure they looks like I expect them to, instead of opening up the file and scrolling through all the lines, checking each by eye, I typically use various commands to just get an idea of what it looks like before proceeding. Oftentimes, this is sufficient; we don't need to check every line.

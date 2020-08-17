@@ -19,7 +19,7 @@ cases_latest <- cases %>% filter(date == "2020-08-03") %>%
 # These data from last time are all at the county level, which vary considerably by size.
 
 # Let's load in some additional data on population size by county, obtained from www.census.gov.
-pop_sizes <- read_delim(file="co-est2019-annres.csv", delim=",")
+pop_sizes <- read_delim(file="co-est2019-annres.csv.xz", delim=",")
 
 # Always double check file to make sure it looks alright!
 head(pop_sizes) 
