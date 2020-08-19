@@ -1,0 +1,11 @@
+---
+title: "ggplot basics"
+subtitle: "Bioinformatics Coffee Hour"
+date: "August 25, 2020"
+author: "Tim Sackton"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
