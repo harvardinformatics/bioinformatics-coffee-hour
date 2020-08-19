@@ -1,3 +1,3 @@
-FROM rocker/binder:4.0.2
+FROM rocker/binder:3.6.3
 
-COPY --chown=${NB_USER}:rstudio ./ggplot-basics/ /home/rstudio
+COPY --chown=rstudio:rstudio ./ggplot-basics/ ${HOME}
