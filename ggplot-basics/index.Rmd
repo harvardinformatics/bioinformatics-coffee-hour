@@ -9,3 +9,136 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+The goal of this workshop is to teach the grammar of graphics in R, with a focus on **ggplot2**. The consistent grammar implemented in ggplot2 is advantageous both because it is easily extendible - that is you can both produce simple plots, but then develop them into complex publication-ready figures. In addition to the basic ggplot2 R package, many extensions for different types of data have been written using the same standardized grammar.
+
+ggplot2 is part of the tidyverse package, and to make it easier to load our dataset and manipulate it prior to plotting, we will load the entire tidyverse package.
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(dslabs)
+```
+
+# Basic grammar of ggplot
+
+Today we will be introducing the basics of ggplot, using a variety of datasets from the 'dslabs' package, which includes data that has already been cleaned and tidied, and is appropriate for various plotting tasks.
+
+There are three key components that make up every ggplot:
+1. **data**
+2. **aesthetic mappings** (which variables in your data map to which visual properties)
+3. **geometric object (geom) function** (a layer describing how to render each observation)
+
+There are other optional components that control the visualization of the plots, but for now, we will focus on getting these three key elements down. The basic formula for these options is:
+
+`ggplot(data=<dataset>, aes(<mappings>)) + <geom_function>()`
+
+Let's make a basic plot using this grammar. You can see that this is really not much more complicated than the base R *plot* function.
+
+We'll use a dataset from the website [Spurious Correlations](https://www.tylervigen.com/spurious-correlations), which is amusing to browse and demonstrates the limitations of inference from correlations along.
+
+```{r, echo=FALSE}
+data(divorce_margarine)
+ggplot(data=divorce_margarine, aes(x=divorce_rate_maine, y=margarine_consumption_per_capita)) +
+  geom_point()
+```
+Let's break down what this is actually doing a little bit, to try to get an inuititive understanding for how the 'grammer of graphics' works.
+
+The initial ggplot plot command sets up a coordinate axis. We can just run this, without the geom_point() command, to see what happens:
+
+```{r fig.show='asis'}
+ggplot(divorce_margarine, aes(x=divorce_rate_maine, y=margarine_consumption_per_capita))
+```
+
+Note that this just sets up the coordinate system: no points are plotted. The plotting happens only when we *add* geom_point() to the plot. So each ggplot is set up as layers: first, a coordinate system, and then one or more overlays plotting data on that coordinate system. 
+
+This has a few implications for how to think about plots. First, it means that you can layer multiple plots on single coordinate system -- we'll see how to do this in a minute. Second, it means that you can save a coordinate system as an object, and then add different plots to it.
+
+We'll do both these things now.
+
+```{r echo=TRUE}
+spurCor <- ggplot(divorce_margarine, aes(x=divorce_rate_maine, y=margarine_consumption_per_capita))
+spurCor + geom_point()
+spurCor + geom_point() + geom_smooth()
+```
+Note, this adds a y ~ x line to our plot, on top of the scatterplot.
+
+If we take our spurCor coordinate system, we can also just add a line, without the scatterplot, by adding geom_smooth(). We'll also add some options here, instead of using the defaults. In this case, we are using a linear model (method="lm"), with a simple y = x formula. 
+
+```{r echo=FALSE}
+spurCor + geom_smooth(method = "lm", formula = y ~ x)
+```
+
+Again, remember the basic framework is:
+1. **data**
+2. **aesthetic mappings** (which variables in your data map to which visual properties)
+3. **geometric object (geom) function** (a layer describing how to render each observation)
+
+In this case, we've stored the data and aesthetic mappings/coordinate system in the spurCor object.
+
+As an aside: ggplot includes a huge number of options for controlling how plots look - colors, background, axis, labels, titles, legends, and more. In addition, these options can be wrapped in themes that apply a consistent look to all your graphs. While we will see a few of these in operation in the next few examples, in the interest of time we won't be able to cover all the possible options for controlling the look of graphics today. However, you can look at some [other](http://r-statistics.co/Complete-Ggplot2-Tutorial-Part2-Customizing-Theme-With-R-Code.html) [tutorials](http://zevross.com/blog/2014/08/04/beautiful-plotting-in-r-a-ggplot2-cheatsheet-3/).
+
+Next, let's look at a slightly more complicated dataset and see some basic customization options.
+
+We'll use another dataset available from the dslabs package, the gapminder package.
+
+```{r}
+data(gapminder)
+ggplot(gapminder, aes(x=life_expectancy, y=gdp/population)) + geom_point()
+```
+A few things to note. First of all, we can define new variables in the aes statement, using syntax like the tidyverse mutate() command. This can be very useful. Second, though, this plot doesn't look so good. There are lots of points, they are overplotted on top of each other, just plain black is boring, and there is a lot more data in our dataset we might want to know about. 
+
+Let's do this again, but introduce some customization options.
+
+```{r}
+gapminder %>% filter(year == 2000, !is.na(gdp)) %>% # let's just look at one year
+  mutate(gdpPerCap = gdp/population) %>%
+  ggplot(aes(x = life_expectancy, y=gdpPerCap, color=continent)) + geom_point()
+```
+
+We've added a few things here. First, we did some filtering and rearranging with tidyverse before sending the data to ggplot. Second, we added a color = <variable> to the aes() code, which tells ggplot to color each point based on the value of that variable.
+
+Let's try these two changes. First, we'll keep the same plot as above, but make all the points red. Second, we'll look at Europe by year, and color the points by GDP 
+
+```{r}
+gapminder %>% filter(year==2000, !is.na(gdp)) %>%
+  mutate(gdpPerCap = gdp/population) %>%
+  ggplot(aes(x = life_expectancy, y=gdpPerCap)) + geom_point(color="red")
+
+gapminder %>% filter(continent == "Europe", !is.na(gdp)) %>%
+  mutate(gdpPerCap = gdp/population) %>%
+  ggplot(aes(y = life_expectancy, x=year, color=gdpPerCap)) + geom_point()
+```
+Note that we put the color option in geom_point() if we wanted everything to be the same color. This sets the color for that layer only. This means we can do things like this:
+
+```{r}
+gapminder %>% filter(year==2000, !is.na(gdp)) %>%
+  mutate(gdpPerCap = gdp/population) %>%
+  ggplot(aes(x = life_expectancy, y=log10(gdpPerCap), color=continent)) +
+  geom_point(color="black", alpha = 0.2) +
+  geom_smooth(method="lm", formula = y ~ x, se = FALSE)
+```
+
+In this case, this may not be a particularly useful graph, but note two things:
+ * The update to the aesthetics (changing color to "black") in a geom statement override the default aes we call in the ggplot command
+ * This doesn't persist to the next layer, which goes back to using the default aesthetics
+ 
+This means we can change certain parts of the aesthetic on a layer by layer basis.
+ 
+Another way to change the aesthetic is by using themes, which replace a bunch of aesthetics. Here are few examples; there are tons more available in other packages, e.g. the ggthemes package, to help you customize your plots. You can also make your own, but that is beyond the scope of this tutorial.
+
+I will also add a command to scale the y axis to be log10 scale.
+ 
+```{r}
+ gdp_v_le <- gapminder %>% filter(year==2000, !is.na(gdp)) %>%
+  mutate(gdpPerCap = gdp/population) %>%
+  ggplot(aes(x = life_expectancy, y=gdpPerCap, color=continent)) +
+  geom_point(color="black", alpha = 0.2) +
+  geom_smooth(method="lm", formula = y ~ x, se = FALSE) +
+  scale_y_log10()
+gdp_v_le + theme_dark()
+gdp_v_le + theme_classic()
+gdp_v_le + theme_minimal()
+```
+
+So far, we've only looked at plots involving two dimensional continous data, such as scatter and line plots. Let's now look at some additional types of plots.
+
