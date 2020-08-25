@@ -129,7 +129,7 @@ Another way to change the aesthetic is by using themes, which replace a bunch of
 I will also add a command to scale the y axis to be log10 scale.
  
 ```{r}
- gdp_v_le <- gapminder %>% filter(year==2000, !is.na(gdp)) %>%
+gdp_v_le <- gapminder %>% filter(year==2000, !is.na(gdp)) %>%
   mutate(gdpPerCap = gdp/population) %>%
   ggplot(aes(x = life_expectancy, y=gdpPerCap, color=continent)) +
   geom_point(color="black", alpha = 0.2) +
@@ -142,3 +142,57 @@ gdp_v_le + theme_minimal()
 
 So far, we've only looked at plots involving two dimensional continous data, such as scatter and line plots. Let's now look at some additional types of plots.
 
+## 1-d plots
+
+The simplest kind of one-dimensional plots are those that summarize the distribution of a single continuous variable, such as histograms and density plots. These are very useful, so let's look at how to make them with ggplot.
+
+```{r}
+gapminder %>% ggplot(aes(life_expectancy)) + geom_histogram(binwidth=2)
+```
+
+```{r}
+le_dist <- gapminder %>% mutate(decade = as.factor(floor(year/10))) %>% 
+  ggplot(aes(life_expectancy, color=decade))
+le_dist + geom_histogram(binwidth = 3)
+le_dist + geom_freqpoly(binwidth = 3)
+le_dist + geom_density()
+```
+## Categorical data
+
+Sometimes we want to plot categorical data, either bar plots with counts of each discrete value, or boxplots or similar that summarize the distribution of a continuous variable by category. 
+
+For example, we might want to look at a summary of the plot we just made.
+
+```{r}
+gapminder %>% mutate(decade = as.factor(floor(year/10))) %>% 
+  ggplot(aes(x=decade, y=life_expectancy)) + geom_boxplot()
+gapminder %>% mutate(decade = as.factor(floor(year/10))) %>% 
+  ggplot(aes(x=decade, y=life_expectancy, fill=continent)) + geom_boxplot()
+gapminder %>% mutate(decade = as.factor(floor(year/10))) %>% 
+  ggplot(aes(x=continent, y=life_expectancy)) + geom_boxplot(aes(color=decade))
+```
+
+Notice that the 'color' argument here in aes() functions like a group_by argument, and groups points by default; fill does the same thing but colors the inside of the boxplot instead of the outside. Note also that we can put the aes() argument either in the ggplot call or the geom. For this plot, it doesn't make a difference, but if we wanted to include multiple geoms in one plot, it could. 
+
+Finally, let's end with something a bit more complicated:
+
+```{r}
+gapminder %>% mutate(decade = as.factor(floor(year/10)),
+                      log_gdpPerCap = log10(gdp/population)) %>%
+  filter(!is.na(log_gdpPerCap)) %>%
+  ggplot(aes(x=log_gdpPerCap, y=life_expectancy)) + 
+  geom_point(alpha=0.2, color="gray50") +
+  geom_smooth(color="red", method="loess", formula = y~x) +
+  facet_grid(cols=vars(decade), rows=vars(continent))
+
+```
+
+## Review
+
+We've covered a lot of material here, so let's just touch on the basics.
+
+A plot in ggplot is built up from a dataset, a set of aesthetics establishing a coordinate system and axis, and geoms mapping data to the aesthetics. 
+
+For many simple plots, the default options for the geom call work fine, as we've seen. There are geoms for almost any way of plotting data you could imagine.
+
+Grouping is available as well, which lets you naturally summarize subsets of your data. While we didn't talk about it today, facet_grid and facet_wrap can help you create grids of plots each summarizing a different subset of the data. 
