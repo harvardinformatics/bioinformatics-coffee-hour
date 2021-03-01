@@ -12,15 +12,15 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-One of the reasons R is so useful is because many people have built extensions for R in the form of R packages that you can install. These packages may do broad statistical analyses or analyze specific data types (e.g. comparative phylogenetics). 
+One of the reasons R is so useful is because many people have built extensions for R in the form of R packages that you can install. These packages may do broad statistical analyses or analyze specific data types (e.g. comparative phylogenetics).
 
-This lesson will introduce some data manipulation tools within the [tidyverse](https://www.tidyverse.org), which contains several R packages. These packages include: 
+This lesson will introduce some data manipulation tools within the [tidyverse](https://www.tidyverse.org), which contains several R packages. These packages include:
 * tidyr to convert long vs. wide form objects (not covered here)
-* dplyr to transform and filter data objects, as well as to summarize their contents 
+* dplyr to transform and filter data objects, as well as to summarize their contents
 
-For an overview of how to manipulate data with tidyverse, this [cheat sheet](https://rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf) is particularly helpful. 
+For an overview of how to manipulate data with tidyverse, this [cheat sheet](https://rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf) is particularly helpful.
 
-To install new packages you have never used before in R, use the command `install.packages()`: 
+To install new packages you have never used before in R, use the command `install.packages()`:
 
 ```{r}
 # NOTE that tidyverse is already installed, this is just to illustrate installation
@@ -33,7 +33,17 @@ For packages that are already installed, we need to load them every session (i.e
 library(tidyverse)
 ```
 
-Let's also load in some data to use:
+# Data tables: wide format vs long format
+
+When using tidyverse, you will usually want your data to be "tidy". Tidy data is data where:
+
+1. Every column is variable.
+2. Every row is an observation.
+3. Every cell is a single value.
+
+This is also referred to as **"long format"** (in contrast to "wide format"). Most of the functions in tidyverse assume that your data is in long format; if it isn't, you will want to pre-process it before doing further analysis!
+
+Let's load in some data to use:
 
 ```{r}
 housing<-read.csv("https://raw.githubusercontent.com/datasets/house-prices-us/master/data/cities-month.csv", stringsAsFactors=F, strip.white = T)
@@ -53,30 +63,62 @@ tbdf1
 
 You see here that just printing the tibble to screen displays the data types in each of the columns and the dimensions. Although not apparent with this small dataset, another very handy feature of tibbles is that by default they will only print out the first 10 rows and as many columns as fit in your window. Many packages will accept tibbles instead of data frames with no problems, but if you come across an older package that requires a data frame, it is easy to revert with the `as.data.frame()` function.
 
-Let's slightly polish the dataset we will use today using some tidyr functions. We will gloss over these functions at the moment in order to focus dplyr, but a description of what these functions do may be found in the cheat sheet, and you can observe the differences between housing and housing_clean to see what's done here.
+#### Side Note: %>%
+
+One important piece of syntax is the %>% operator, which acts like a Unix pipe in R. This means you can pass the output of one command to another in linear fashion, as opposed to having to use either nested operations or temporary objects. This makes your code much easier to read!
+
+---
+
+If we look at the dataset we just downloaded, we can see that it is not in proper long, tidy format. Let's polish it using some tidyr functions so that it is easier to work with.
+
+## Going from wide to long: pivot_longer()
+The pivot_longer() function takes a tibble (or data frame) and lengthens it, i.e. increases the number of rows and decreases number of columns:
 
 ```{r, echo = TRUE}
 housing_clean <- housing %>% as_tibble %>%
-  gather(location, local_index, -Date, -National.US) %>% 
+  pivot_longer(cols=c(-Date, -National.US), names_to="location", values_to="local_index")
+  View(housing_clean)
+```
+
+The **cols** argument describes what columns need to be reshaped, i.e. which need to be converted into columns. For us, we want to keep the US national average and the date as columns. We give it a list using the **c** ombine function, and by putting an **-** in front of the column names, we tell it to reshape every column *except* Date and National.US
+
+The **names_to** argument gives a name for the new variable (i.e. column) that stores the data that formerly was in the column names. In our case, we make a variable called "location" that holds all the city names.
+
+The **values_to** argument gives a name for the new variable (i.e. column) that stores the data that was in the cell values, which for us was the local index values in each city.
+
+## Turning a column into multiple columns: separate()
+The separate() function separates a single character named column into several, splitting on a given regular expression. In the following command we run the function twice, separating two different columns:
+
+```{r, echo = TRUE}
+housing_clean2 <- housing_clean %>%
+  separate(location, c("state", "city"),extra="merge") %>%
+  separate(Date, c("year", "month"), extra="drop", remove=F)
+
+View(housing_clean2)
+```
+
+
+Putting it all together:
+
+```{r, echo = TRUE}
+housing_clean <- housing %>% as_tibble %>%
+  pivot_longer(cols=c(-Date, -National.US), names_to="location", values_to="local_index") %>%
   separate(location, c("state", "city"),extra="merge") %>%
   separate(Date, c("year", "month"), extra="drop", remove=F) %>%
   print
 ```
 
-#### Side Note: %>%
-
-One thing I'd like to highlight here is the %>% operator, which acts like a Unix pipe in R. This means you can pass the output of one command to another in linear fashion, as opposed to having to use either nested operations or temporary objects. This makes your code much easier to read and debug, and the above code would be considerly ugly without these!
-
+We can observe the differences between housing and housing_clean to see what's being done here, and a more in-depth description of what these functions do can be found in the cheat sheet.
 
 ## Subsetting and Manipulating Data with dplyr
 
-In dpylr, as in tidyr, each action gets its own (verb) function -- so for example filtering data by rows is done with the filter() function. All of these functions have a very similar syntax to tidyr functions. 
+Dplyr is a package included in tidyverse, and is useful for manipulating our data. Each action gets its own (verb) function -- so for example filtering data by rows is done with the filter() function. All of these functions have a very similar syntax to tidyr functions.
 
-arrange(), rename(), select(), mutate() are used to sort data, rename columns, and upate/create columns
+arrange(), rename(), select(), mutate() are used to sort data, rename columns, and update/create columns
 
 We'll use the housing dataset to look at how these functions work.
 
-arrange() sorts by one or more columns, with subsequent columns used to break ties in earlier columns. E.g., 
+arrange() sorts by one or more columns, with subsequent columns used to break ties in earlier columns. E.g.,
 ```{r}
 housing_clean %>% arrange(year, month)
 housing_clean %>% arrange(city, year)
@@ -91,7 +133,7 @@ housing_clean %>% arrange(year, month, state, city) %>%
   rename(national_index = National.US)
 ```
 
-select() selects columns to keep. Note that we can simulatenously rename and reorder columns:
+select() selects columns to keep. Note that we can simultaneously rename and reorder columns:
 
 ```{r}
 housing_clean %>% arrange(year, month, state, city) %>%
@@ -158,7 +200,7 @@ Note that we can combine filters and the other statements to get useful subsets,
 
 ```{r}
 housing_clean %>%
-  filter(city=="Boston", month=="Jan") %>% 
+  filter(city=="Boston", month=="Jan") %>%
   arrange(desc(rel_index)) %>%
   select(year,rel_index) %>%
   head(n=3)
@@ -177,4 +219,3 @@ To get the inverse for this (or any logical statement), simply add a `!` to the 
 housing_clean %>%
   filter(!is.na(local_index))
 ```
-
