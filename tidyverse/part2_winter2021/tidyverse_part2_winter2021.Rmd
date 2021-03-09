@@ -30,7 +30,7 @@ Let's load in the first data set on mask usage in the US, which is in the form o
 
 ```{r}
 mask_use_wide <- read_delim(file="mask-use-by-county.csv", delim=",")
-mask_use
+mask_use_wide
 ```
 
 
@@ -46,7 +46,7 @@ cases <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/master/us
   arrange(fips)
 ```
 
-This is a lot of data. For ~3000 US counties, there's an estimate of cumulative COVID-19 cases and deaths for each day since late January (it's now March again!!!). For now, let's just look at the start of this month. 
+This is a lot of data. For ~3000 US counties, there's an estimate of cumulative COVID-19 cases and deaths for each day since last March (it's now March again!!!). For now, let's just look at the start of this month. 
 
 ```{r, include=FALSE}
 cases_latest <- cases %>% 
@@ -72,15 +72,15 @@ These are just a few commands I might use to look at the first and last few line
 ```{r}
 head(pop_sizes) 
 nrow(pop_sizes) 
-sum(!is.na(pop_sizes$'2019')) # how many counties have size estimates for 2019? it's even closer to the 3142 we expect!
+sum(!is.na(pop_sizes$'2019')) 
 tail(pop_sizes)
 ```
 
 Ok so these data are a little messy and need to be cleaned up.
 
-From these commands, we can see that the entire US was included in this table, which is not a county. We should remove that. Also, county names are all preceded with a ".", something we'll deal with in a moment. The number of rows in the table is very similar to what we expect (3,142 according to wikipedia), but maybe larger by 7 rows or so. The row containing the entire US contributes to this excess of rows beyond our expectation. 
+From these commands, we can see that the county names are all preceded with a ".", something we'll deal with in a moment. The number of rows (i.e. the number of counties) in the table is very similar to what we expect (3,142 according to wikipedia), but maybe larger by 7 rows or so. We can see that the entire US was included in this table, which is not a county so we should remove that.
 
-Looking at the bottom of the table, we see some footnotes were left in. These are probably contributing to the extra number of rows and should absolutely be removed.
+Looking at the bottom of the table, we see some footnotes were left in. These are also contributing to the extra number of rows and should absolutely be removed.
 
 Let's remove these rows at the beginning and end with the **slice()** function, which pulls out rows from a data frame/tibble based on their ordinal position. It keeps all the columns, in contrast to the select() function that we discussed last week.
 
@@ -109,7 +109,7 @@ pop_sizes <- pop_sizes %>%
   mutate(County = str_remove(string = County,pattern = " County"))
 ```
 
-We are combining the mutate() function with **str_remove()** which, as the name suggests, will remove a given pattern from a character column, the County column in this case.
+We are combining the mutate() function with **str_remove()** which, as the name suggests, will remove a given string that matches a pattern from a character column, the County column in this case.
 
 
 This table includes population size data for quite a few years. Let's just get the most recent population estimate, selecting the 2019 column with the select() function, which as mentioned above pulls out specific columns:
@@ -122,7 +122,7 @@ pop_sizes <- pop_sizes %>%
 
 As we did above for the data sets we used last week, we can also combine all of these individual commands into one compact command that might look something like this:
 ```{r, include=FALSE}
-pop_sizes <- read_delim(file="~/Documents/GitHub/bioinformatics-coffee-hour/tidyverse/part2_winter2021/co-est2019-annres.csv.xz", delim=",") %>% 
+pop_sizes <- read_delim(file="co-est2019-annres.csv.xz", delim=",") %>% 
   slice(2:3143) %>%
   separate(col = 'Geographic Area', into = c("County", "State"), sep = ", ") %>%
   mutate(County = str_remove(string = County,pattern = ".")) %>%
@@ -197,6 +197,7 @@ We can make a quick plot of these data using a base R (i.e. not tidyverse) plott
 ```{r}
 cases_popsize_masked <- cases_popsize_masked %>%
   mutate(FracPos = cases/pop_size)
+
 plot(x=cases_popsize_masked$pop_size,
      y=cases_popsize_masked$FracPos,
      log="x",
@@ -208,7 +209,7 @@ plot(x=cases_popsize_masked$pop_size,
 Looks interesting. Counties with larger population sizes may look like they have higher proportion of cases, but it's a little complicated because there's a lot of variability for counties with smaller population sizes. 
 
 
-One thing we might be interested in are those outliers with very high rates of positive cases. What counties are theses, and in what states? We can very easily check this with the following:
+One thing we might be interested in are those outliers with very high rates of positive cases. What counties are these, and in what states? We can easily check this with the following:
 
 ```{r}
 cases_popsize_masked %>%
@@ -221,6 +222,7 @@ Let's add another column for death rate, and visualize the relationship between 
 ```{r}
 cases_popsize_masked <- cases_popsize_masked %>%
   mutate(FracDeaths = deaths/cases)
+
 plot(x=cases_popsize_masked$FracPos,
      y=cases_popsize_masked$FracDeaths,
      log="",
@@ -258,7 +260,7 @@ summary(mask_use_wide)
 You can do it with way, but it is kind of clunky, and it wouldn't be practical if your dataset has too many variables. It is easier to first convert the data in long format:
 
 ```{r, include=FALSE}
-mask_use_long <- mask_use %>%
+mask_use_long <- mask_use_wide %>%
   pivot_longer(cols = -COUNTYFP, names_to = "MaskUseResponse", values_to = "MaskUseProportion") %>%
   rename("fips" = COUNTYFP) %>%
   arrange(fips)
