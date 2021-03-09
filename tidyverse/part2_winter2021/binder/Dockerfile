@@ -5,7 +5,7 @@ ARG NB_UID
 
 USER root
 
-COPY ./tidyverse/part1/ ${HOME}
+COPY ./tidyverse/part2_winter2021/ ${HOME}
 
 RUN chown -R ${NB_USER} ${HOME}
 
