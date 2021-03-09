@@ -1,0 +1,325 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# NEW FXNS: slice(), inner_join(), summarize(), group_by()
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+This is the second session covering tidyverse commands. We will show you how to use some new functions, but we will also use some of the functions we previously used last week which will be good for extra practice. If you missed the previous session, that should not be a problem.
+
+From last time, we looked at this [cheat sheet](https://rstudio.com/wp-content/uploads/2015/02/data-wrangling-cheatsheet.pdf) to occasionally guide us.
+
+It's typical to load all the libraries you need at the top of your code.
+```{r}
+library(tidyverse)
+```
+
+------
+For this week, rather than use an example dataset, we are going to use several publically available datasets from the NYT github repository on the COVID-19 pandemic. This is because "wild-caught" datasets are often much messier than example datasets, so it will help us become more familiar with how you would actually go about processing data. We are going to keep our analysis purely descriptive, as it would be irresponsible to make any conclusive claims after fiddling around with R for only an hour!
+
+
+## Dataset 1: mask useage
+
+Let's load in the first data set on mask usage in the US, which is in the form of a comma separated list. This data is from a NYT survey where they asked the question: "How often do you wear a mask in public when you expect to be within six feet of another person?" (As a note, this survey was done several months ago, so these numbers are not the most up-to-date.) 
+
+```{r}
+mask_use_wide <- read_delim(file="https://raw.githubusercontent.com/nytimes/covid-19-data/bde13b021e99c6b4a63fb66a6144e889cc635e31/mask-use/mask-use-by-county.csv", delim=",")
+mask_use
+```
+
+
+It looks like for all the counties are represented with a 5-digit FIPS code, which is not exactly ideal because we don't know what these numbers mean. We'll get the names in a moment by combining these data with another file that also has these FIPS codes AND county names. We can thus match these data tables based on shared FIPS codes to combine them.
+
+
+## Dataset 2: US case counts
+
+In addition to the mask data, let's also load in data on COVID-19 case counts across the US, also supplied by the NYT, and combine it with our mask use data. Unlike the previous data that we loaded in from our local file system, these data we will directly download because they are so large. This will also show how you can specify web addresses instead of file names for read_delim(). This file is also comma separated, so we will let read_delim() know this.
+
+```{r, include=FALSE}
+cases <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/master/us-counties.csv", delim=",") %>%
+  arrange(fips)
+```
+
+This is a lot of data. For ~3000 US counties, there's an estimate of cumulative COVID-19 cases and deaths for each day since late January (it's now March again!!!). For now, let's just look at the start of this month. 
+
+```{r, include=FALSE}
+cases_latest <- cases %>% 
+  filter(date == "2021-03-01") %>%
+  arrange(fips)
+```
+
+As a refresher, we are using the filter() function to select only the rows that match the string "2021-03-01" in the date column, then using the arrange() function to sort the counties by FIPS code.
+
+-----
+
+## Dataset 3: census data
+
+Let's load in some additional data on population size by county, which are obtained from www.census.gov.
+
+```{r, include=FALSE}
+pop_sizes <- read_delim(file="~/Documents/GitHub/bioinformatics-coffee-hour/tidyverse/part2_winter2021/co-est2019-annres.csv.xz", delim=",")
+```
+
+When I'm working with larger files and I want to make sure they looks like I expect them to, instead of opening up the file and scrolling through all the lines, checking each by eye, I typically use various commands to just get an idea of what it looks like before proceeding. Oftentimes, this is sufficient; we don't need to check every line.
+
+These are just a few commands I might use to look at the first and last few lines, how many rows there are overall, and also get an idea of how much missing data there might be:
+```{r}
+head(pop_sizes) 
+nrow(pop_sizes) 
+sum(!is.na(pop_sizes$'2019')) # how many counties have size estimates for 2019? it's even closer to the 3142 we expect!
+tail(pop_sizes)
+```
+
+Ok so these data are a little messy and need to be cleaned up.
+
+From these commands, we can see that the entire US was included in this table, which is not a county. We should remove that. Also, county names are all preceded with a ".", something we'll deal with in a moment. The number of rows in the table is very similar to what we expect (3,142 according to wikipedia), but maybe larger by 7 rows or so. The row containing the entire US contributes to this excess of rows beyond our expectation. 
+
+Looking at the bottom of the table, we see some footnotes were left in. These are probably contributing to the extra number of rows and should absolutely be removed.
+
+Let's remove these rows at the beginning and end with the **slice()** function, which pulls out rows from a data frame/tibble based on their ordinal position. It keeps all the columns, in contrast to the select() function that we discussed last week.
+
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>% dplyr::slice(2:3143) 
+```
+
+With this command, we are slicing out the middle of the data frame to remove the row with data from the whole US, as well as the footnotes at the bottom.
+
+The 'Geographic Area' column has two pieces of info in it: county and state. We should split this column into two columns so that we can separately access the info. For instance, later on we will do an analysis not by county but by state, summing up across a state's counties, and this requires having this information in it's own separate column. To separate this info into 2 seperate columns, we will use the separate() function:
+
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>% separate(col = 'Geographic Area',
+                                    into = c("County", "State"),
+                                    sep = ", ")
+```
+
+Note that unlike last time we are specifying what we want to separate on with the "sep=" argument, which is a comma followed by a white space.
+
+
+Let's get rid of extra characters in the new 'County' column. We don't need the "." that precedes each name, and it's pointless that each individual county name is followed by "County"... we know they're counties based on the name of the column. We can use the mutate() function to add new rows with new names, but if the name of the new row we want is the same as an existing one, it just replaces it!
+
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>% 
+  mutate(County = str_remove(string = County,pattern = ".")) %>%
+  mutate(County = str_remove(string = County,pattern = " County"))
+```
+
+We are combining the mutate() function with **str_remove()** which, as the name suggests, will remove a given pattern from a character column, the County column in this case.
+
+
+This table includes population size data for quite a few years. Let's just get the most recent population estimate, selecting the 2019 column with the select() function, which as mentioned above pulls out specific columns:
+
+```{r, include=FALSE}
+pop_sizes <- pop_sizes %>%
+  select(County, State, "2019")
+```
+
+
+As we did above for the data sets we used last week, we can also combine all of these individual commands into one compact command that might look something like this:
+```{r, include=FALSE}
+pop_sizes <- read_delim(file="~/Documents/GitHub/bioinformatics-coffee-hour/tidyverse/part2_winter2021/co-est2019-annres.csv.xz", delim=",") %>% 
+  slice(2:3143) %>%
+  separate(col = 'Geographic Area', into = c("County", "State"), sep = ", ") %>%
+  mutate(County = str_remove(string = County,pattern = ".")) %>%
+  mutate(County = str_remove(string = County,pattern = " County")) %>%
+  select(County, State, "2019")
+```
+
+
+We can take a quick peek at these population size data, now that they're cleaned, using the summary() function, which shows there's a ton of variability in county sizes!
+```{r}
+summary(pop_sizes)
+```
+
+
+
+## Merging data sets with inner_join()
+
+Let's combine these data on population sizes with our previous data on case counts and mask usage, as it may reveal interesting dynamics that vary by county size.
+
+We will first use the join command on the case count data and the county population size data, joining by BOTH county and state. There are many different types of joining functions and it can get fairly confusing, so today we will focus just on **inner_join**. 
+
+```{r, include=FALSE}
+cases_popsize <- inner_join(x=cases_latest, y=pop_sizes, 
+                                  by=c("county"="County", "state"="State"))
+```
+
+The "x=" and "y=" arguments specify which datasets we want to merge. Inner_join() returns all rows in dataset x that has matching values in dataset y, and all the columns in both x and y.
+
+The "by=" arugment tells what variables the function should merge by, as a character vector. In other words we tell the function what columns we want to match: it compares the values in the columns in x and y, and if they match it merges them. We are matching the "county" coumn in cases_latest with the "County" column in pop_sizes, and the "state" and "State" columns in the same.
+
+Note that because the column names (i.e. variable names) are slightly different between datasets, we have to specify which we are matching using an "="; if they had the same names, we could just list them. 
+
+
+## More merging 
+
+Now let's merge this table that has case counts and population size with the mask data! For now, let's not add in all the mask data. Let's only incorporate the the proportion of people who are "ALWAYS" masked for each county.
+
+```{r, include=FALSE}
+cases_popsize_masked <- inner_join(x=cases_popsize, 
+                            y=select(mask_use_wide, c(COUNTYFP, ALWAYS)),
+                            by=c("fips" = "COUNTYFP"))
+```
+
+Note that we are nesting the select() function within our inner_join() call, allowing us to subset the mask useage dataset without making an entirely new data frame.
+
+
+Looking at this data table, for each county we now have cases, deaths, population size, and the proportion of people who are always masked.
+
+You may also notice the population size data had a column entitled "2019" for size estimates during that year. Let's make this more informative and change it to "pop_size", and rename the ALWAYS column so that we know it's referring to always masked.
+
+```{r, include=FALSE}
+cases_popsize_masked <- cases_popsize_masked %>%
+  rename("pop_size" = "2019", "AlwaysMasked" = ALWAYS)
+```
+
+
+## Visualizing data
+
+Let's quickly probe these data just to get an idea of what they look like. The main goal here is to teach you how to use R/tidyverse commands to quickly and easily explore your data. Again, due to the context of these data, let's keep any results as fairly descriptive observations. We can't say anything conclusive without more complicated analyses that we'll leave to the public health officials.
+
+Let's assume these case count data are accurately measuring the number of people who are getting coronavirus infections (which is obviously an underestimate, as many cases can be asymptomatic!). Assuming this, what fraction of a county's population is testing positive, and how does this fraction vary with population size? Let's use the mutate() function to add a new column with number of cases normalized by population size:
+
+```{r}
+cases_popsize_masked <- cases_popsize_masked %>%
+  mutate(FracPos = cases/pop_size)
+```
+
+
+Do counties with large populations have a higher proportion of case counts? Let's use a simple plotting function to plot population size on the x axis and proportion of cases on y axis. Since we will look at the proportion of cases by dividing the data in the case counts column by the data in the population size column, let's just make a new column called 'FracPos' that contains this information
+
+We can make a quick plot of these data using a base R (i.e. not tidyverse) plotting function:
+```{r}
+cases_popsize_masked <- cases_popsize_masked %>%
+  mutate(FracPos = cases/pop_size)
+plot(x=cases_popsize_masked$pop_size,
+     y=cases_popsize_masked$FracPos,
+     log="x",
+     ylab="Fraction of cases",
+     xlab="pop size")
+# DON'T RUN CORRELATION ANALYSES WITH HETEROSCEDASTICITY
+```
+
+Looks interesting. Counties with larger population sizes may look like they have higher proportion of cases, but it's a little complicated because there's a lot of variability for counties with smaller population sizes. 
+
+
+One thing we might be interested in are those outliers with very high rates of positive cases. What counties are theses, and in what states? We can very easily check this with the following:
+
+```{r}
+cases_popsize_masked %>%
+  filter(FracPos > 0.08) %>%
+  arrange(desc(FracPos))
+```
+
+
+Let's add another column for death rate, and visualize the relationship between the fraction of positive cases and the death rate:
+```{r}
+cases_popsize_masked <- cases_popsize_masked %>%
+  mutate(FracDeaths = deaths/cases)
+plot(x=cases_popsize_masked$FracPos,
+     y=cases_popsize_masked$FracDeaths,
+     log="",
+     xlab="FracCases",
+     ylab="FracDeaths")
+```
+
+
+What are these counties that have been severely impacted by deaths? Is this just noise from counties with small sizes and/or small case counts?
+
+```{r}
+cases_popsize_masked %>%
+  filter(FracDeaths > 0.06) %>%
+  arrange(desc(FracDeaths))
+```
+
+
+# Using group_by() and summarize() functions to evaluate data
+
+The use of the group_by() and summarize() functions allows us to quickly get extremely informative information from our data. 
+
+We'll show how they're useful in many ways, but first we need to do a little more reshaping of our data.
+
+Let's go back to our original mask use data table, not the combined one. What if we wanted to quickly get the overall mean values of ALWAYS, ... , NEVER across all the counties? We could use the original data in wide format, and calculate the mean for each of these columns. We could also use the simple summary() function which outputs a table:
+
+```{r}
+mean(mask_use_wide$NEVER)
+mean(mask_use_wide$RARELY)
+mean(mask_use_wide$SOMETIMES)
+mean(mask_use_wide$FREQUENTLY)
+mean(mask_use_wide$ALWAYS)
+summary(mask_use_wide)
+```
+
+You can do it with way, but it is kind of clunky, and it wouldn't be practical if your dataset has too many variables. It is easier to first convert the data in long format:
+
+```{r, include=FALSE}
+mask_use_long <- mask_use %>%
+  pivot_longer(cols = -COUNTYFP, names_to = "MaskUseResponse", values_to = "MaskUseProportion") %>%
+  rename("fips" = COUNTYFP) %>%
+  arrange(fips)
+```
+
+As a reminder, the "cols=" argument specifies which columns we are reshaping into rows (all *except* the "COUNTYFP" column), the "names_to=" argument specifies the name of the column that will hold the names of the reshaped columns, and the "values_to=" argument gives the name of the column that will hold the values of the reshaped columns.
+
+We can now use the **group_by()** function, which takes our existing dataset and converts it to a grouped dataset based on a given variable, and combine it with the **summarize()** function (different from summary used above!) to get mean for each group:
+
+```{r}
+mask_use_long %>% 
+  group_by(MaskUseResponse) %>% 
+  summarize(mean(MaskUseProportion))
+```
+
+
+## More data analysis and visualization
+
+Let's explore another example of group_by() and summarize() using our tibble that has all our combined information.
+
+Instead of focusing on counties as our unit of analysis, we can use group_by() to easily switch to a state level analysis by telling the summarize() function to perform analyses for each state, combining all the rows that have the same value under the "state" column. When we combine the group_by() function with summarize(), we can easily do some pretty powerful analyses that would take a lot of effort using other programs.
+
+```{r}
+cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(MeanMasked = mean(AlwaysMasked)) %>%
+  arrange(desc(MeanMasked))
+```
+
+
+This is potentially a bad analysis because we are calculating a mean for a state based on it's counties, and some of these counties may be represented by fewer people. So if we truly wanted the average behavior of a state, we should weight each county by its population size. Why should a county with a size of 400 contribute equally to the mean as a county of size 40,000?
+
+The following code calculates a custom mean value, where each county is weighted by its population size:
+
+```{r}
+cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(WeightedMeanMasked = sum(AlwaysMasked*pop_size)/sum(pop_size)) %>%
+  arrange(desc(WeightedMeanMasked))
+```
+
+
+Did this weighting by county size actually make a difference? Let's store these analyses as 'x' and 'y' and compare them:
+```{r}
+x <- cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(MeanMasked = mean(AlwaysMasked)) %>%
+  arrange(state)
+y <- cases_popsize_masked %>%
+  group_by(state) %>%
+  summarize(WeightedMeanMasked = sum(AlwaysMasked*pop_size)/sum(pop_size)) %>%
+  arrange(state)
+hist(x$MeanMasked - y$WeightedMeanMasked)
+```
+
+It looks like on average, AlwaysMasked estimates that don't take pop_size into account are systematically lower than those that do. When we don't take county size into account, we effectively give more weight to smaller counties. 
+
+
+# Summary:
+## New tidyverse functions used today:
+- slice() to select specific rows by index number
+- inner_join() to merge datasets based on given variable(s)
+- mutate() with str_remove to get rid of characters or words we don't want, there are many similar functions in the stringr package, which has its own cheat sheet
+- group_by() to categorize our data by the values in a particular column (here, by state)
+- summarize() to calculate simple but very informative statistics, such as mean and variance
