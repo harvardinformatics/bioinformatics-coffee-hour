@@ -46,7 +46,7 @@ cases <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/master/us
   arrange(fips)
 ```
 
-This is a lot of data. For ~3000 US counties, there's an estimate of cumulative COVID-19 cases and deaths for each day since last March (it's now March again!!!). For now, let's just look at the start of this month. 
+This is a lot of data. For ~3000 US counties, there's an estimate of cumulative COVID-19 cases and deaths for each day since last March (it's now March again!!!). For now, let's just look at the start of this month.
 
 ```{r, include=FALSE}
 cases_latest <- cases %>% 
