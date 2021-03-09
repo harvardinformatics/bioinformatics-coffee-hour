@@ -1,9 +1,10 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Tidyverse Tibbles and Bits"
+subtitle: "Bioinformatics Coffee Hour"
+date: "Mar 9, 2021"
+author: "Brian Arnold; Danielle Khost"
+output: html_document
 ---
-
-# NEW FXNS: slice(), inner_join(), summarize(), group_by()
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -62,7 +63,7 @@ As a refresher, we are using the filter() function to select only the rows that 
 Let's load in some additional data on population size by county, which are obtained from www.census.gov.
 
 ```{r, include=FALSE}
-pop_sizes <- read_delim(file="~/Documents/GitHub/bioinformatics-coffee-hour/tidyverse/part2_winter2021/co-est2019-annres.csv.xz", delim=",")
+pop_sizes <- read_delim(file="co-est2019-annres.csv.xz", delim=",")
 ```
 
 When I'm working with larger files and I want to make sure they looks like I expect them to, instead of opening up the file and scrolling through all the lines, checking each by eye, I typically use various commands to just get an idea of what it looks like before proceeding. Oftentimes, this is sufficient; we don't need to check every line.
