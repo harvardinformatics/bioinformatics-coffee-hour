@@ -29,7 +29,11 @@ For this week, rather than use an example dataset, we are going to use several p
 Let's load in the first data set on mask usage in the US, which is in the form of a comma separated list. This data is from a NYT survey where they asked the question: "How often do you wear a mask in public when you expect to be within six feet of another person?" (As a note, this survey was done several months ago, so these numbers are not the most up-to-date.) 
 
 ```{r}
+<<<<<<< HEAD
 mask_use_wide <- read_delim(file="mask-use-by-county.csv", delim=",")
+=======
+mask_use_wide <- read_delim(file="https://raw.githubusercontent.com/nytimes/covid-19-data/bde13b021e99c6b4a63fb66a6144e889cc635e31/mask-use/mask-use-by-county.csv", delim=",")
+>>>>>>> bfb375bc22239322d6e6089bdac1ac5be52372c1
 mask_use_wide
 ```
 
@@ -46,7 +50,11 @@ cases <- read_delim(file="https://github.com/nytimes/covid-19-data/raw/master/us
   arrange(fips)
 ```
 
+<<<<<<< HEAD
 This is a lot of data. For ~3000 US counties, there's an estimate of cumulative COVID-19 cases and deaths for each day since last March (it's now March again!!!). For now, let's just look at the start of this month. 
+=======
+This is a lot of data. For ~3000 US counties, there's an estimate of cumulative COVID-19 cases and deaths for each day since last March (it's now March again!!!). For now, let's just look at the start of this month.
+>>>>>>> bfb375bc22239322d6e6089bdac1ac5be52372c1
 
 ```{r, include=FALSE}
 cases_latest <- cases %>% 
