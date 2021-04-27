@@ -23,3 +23,4 @@
 | Tues, March 2, 2021 | [Tidyverse (part 1) Winter 2021](/tidyverse/part1/index.Rmd) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2021-03-02_tidyverse_part1?urlpath=rstudio) |
 | Tues, March 9, 2021 | [Tidyverse (part 2) Winter 2021](/tidyverse/part2_winter2021/tidyverse_part2_winter2021.Rmd) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2021-03-09_tidyverse_part2?urlpath=rstudio) |
 | Tues, April 20, 2021 | [Intro to AWK and Grep Spring 2021](/intro_awk_spring2021/index.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/harvardinformatics/bioinformatics-coffee-hour/2021-04-20_intro_awk?urlpath=lab/tree/intro_awk_spring2021/index.ipynb) |
+| Tues, April 27, 2021 | [Singularity (part 1): Finding and Running Containers](/singularity/part1.md)
