@@ -188,6 +188,24 @@ BUG_REPORT_URL="https://bugs.debian.org/"
 
 ---
 
+### Container Registries - Docker / OCI (Open Container Image)
+
+Singularity can build SIF images from Docker / OCI images in container other registries.
+The most popular:
+
+* DockerHub
+  - https://hub.docker.com/
+  - The original and most popular (public) container registry
+  - [Image "pull" limits](https://www.docker.com/increase-rate-limits)
+    - 100 anonymous image pulls per 6 hours per public IP address
+    - 200 anonymous images pulls per (free) Docker account (see [singularity remote login](https://sylabs.io/guides/3.7/user-guide/cli/singularity_remote_login.html) to authenticate)
+* Quay
+  - https://quay.io/search
+      - *Caveat: looks like search will required RedHat SSO on July 1, 2021...*
+
+---
+
+
 ## Other OCI Container Registries
 
 * GitHub Container Registry
@@ -228,25 +246,6 @@ Mainly for paying customers:
 
 ---
 
-### Container Registries - Docker / OCI (Open Container Image)
-
-Singularity can build SIF images from Docker / OCI images in container other registries.
-The most popular:
-
-* DockerHub
-  - https://hub.docker.com/
-  - The original and most popular (public) container registry
-  - [Image "pull" limits](https://www.docker.com/increase-rate-limits)
-    - 100 anonymous image pulls per 6 hours per public IP address
-    - 200 anonymous images pulls per (free) Docker account (see [singularity remote login](https://sylabs.io/guides/3.7/user-guide/cli/singularity_remote_login.html) to authenticate)
-  - Don't blindly trust any image; look for repositories with "Source Repository" listed; e.g. [ewels/multiqc](https://hub.docker.com/r/ewels/multiqc)
-      - Implies & GitHub accounts linked; automated builds performed from listed source repository
-* Quay
-  - https://quay.io/search
-      - *Caveat: looks like search will required RedHat SSO on July 1, 2021...*
-
----
-
 ## Generating a Singularity image from a Docker image
 
 Many container registries assume [Docker](https://docker.com), and suggest syntax like:
@@ -284,8 +283,9 @@ trinityrnaseq.v2.12.0.simg
   - [QIIME 2](https://docs.qiime2.org/2021.2/install/virtual/docker/)
       - `singularity pull --disable-cache docker://quay.io/qiime2/core:2021.2`
   - [MultiQC](https://github.com/ewels/MultiQC)
-      - https://hub.docker.com/r/ewels/multiqc
-      - `singularity pull --disable-cache docker://ewels/multiqc:1.10.1`
+      - https://github.com/ewels/MultiQC
+          - Links to: https://hub.docker.com/r/ewels/multiqc
+          - `singularity pull --disable-cache docker://ewels/multiqc:1.10.1`
 * Existence of Dockerfile doesn't mean an image is avialable in a container registry (like Docker Hub)
   - e.g., [Augustus](https://github.com/Gaius-Augustus/Augustus) provides a Dockerfile, but needs to be built
 
@@ -295,7 +295,11 @@ trinityrnaseq.v2.12.0.simg
 
 * https://cernvm.cern.ch/fs/
 * Singularity images of Biocontainers (maintained by the Galaxy Project) available at:
-`/cvmfs/singularity.galaxyproject.org/FIRST_LETTER/SECOND_LETTER/PACKAGE_NAME:VERSION--CONDA_BUILD`
+
+```
+/cvmfs/singularity.galaxyproject.org/FIRST_LETTER/SECOND_LETTER/\
+PACKAGE_NAME:VERSION--CONDA_BUILD
+```
 
 ex.
 
